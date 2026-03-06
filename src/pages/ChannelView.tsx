@@ -419,6 +419,9 @@ const ChannelView = () => {
 
       if (thumbnailFile) {
         thumbnailUrl = await uploadThumbnail();
+      } else if (thumbnailPreview && !thumbnailPreview.startsWith("data:") && thumbnailPreview !== channel.thumbnail_url) {
+        // User pasted a URL directly
+        thumbnailUrl = thumbnailPreview;
       }
 
       const { error } = await supabase
@@ -828,13 +831,28 @@ const ChannelView = () => {
           {isEditing && (
             <div className="space-y-4 mb-4">
               <div>
-                <Label htmlFor="edit-thumbnail">Обновить обложку</Label>
+                <Label htmlFor="edit-thumbnail">Обновить обложку (файл)</Label>
                 <Input
                   id="edit-thumbnail"
                   type="file"
                   accept="image/*"
                   onChange={handleThumbnailChange}
                   className="mt-2"
+                />
+              </div>
+              <div>
+                <Label>Или вставьте URL изображения</Label>
+                <Input
+                  placeholder="https://example.com/image.jpg"
+                  value={thumbnailPreview.startsWith("data:") ? "" : thumbnailPreview}
+                  onChange={(e) => {
+                    const url = e.target.value.trim();
+                    if (url) {
+                      setThumbnailPreview(url);
+                      setThumbnailFile(null);
+                    }
+                  }}
+                  className="mt-1"
                 />
               </div>
               <div>

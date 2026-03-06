@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tv, Radio } from "lucide-react";
+import { Tv, Radio, ShieldAlert } from "lucide-react";
 import { z } from "zod";
 
 const signUpSchema = z.object({
@@ -26,75 +26,72 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
+  const [banMessage, setBanMessage] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user is already logged in
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate("/");
+        checkBanAndRedirect(session.user.id);
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
-        navigate("/");
+        checkBanAndRedirect(session.user.id);
       }
     });
 
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  const checkBanAndRedirect = async (userId: string) => {
+    const { data: ban } = await supabase
+      .from("banned_users")
+      .select("reason, rule_code")
+      .eq("user_id", userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (ban) {
+      await supabase.auth.signOut();
+      setBanMessage(`Ваш аккаунт заблокирован за нарушение правил платформы.\nПричина: ${ban.rule_code || '2.19'} — ${ban.reason || 'запрещён спам каналами и создание фейковых/дублирующих официальных каналов.'}`);
+    } else {
+      navigate("/");
+    }
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setBanMessage(null);
 
     try {
-      // Validate input
       const validatedData = signUpSchema.parse({ username, email, password });
-
       const { data, error } = await supabase.auth.signUp({
         email: validatedData.email,
         password: validatedData.password,
         options: {
-          data: {
-            username: validatedData.username,
-          },
+          data: { username: validatedData.username },
           emailRedirectTo: `${window.location.origin}/`,
         },
       });
 
       if (error) {
-        if (error.message.includes("already registered")) {
-          throw new Error("Этот email уже зарегистрирован");
-        }
+        if (error.message.includes("already registered")) throw new Error("Этот email уже зарегистрирован");
         throw error;
       }
 
       if (data.user) {
-        toast({
-          title: "Добро пожаловать!",
-          description: "Ваш аккаунт успешно создан. Перенаправляем...",
-        });
-        // Clear form
-        setEmail("");
-        setPassword("");
-        setUsername("");
+        toast({ title: "Добро пожаловать!", description: "Ваш аккаунт успешно создан. Перенаправляем..." });
+        setEmail(""); setPassword(""); setUsername("");
       }
     } catch (error: any) {
       if (error instanceof z.ZodError) {
-        toast({
-          title: "Ошибка валидации",
-          description: error.issues[0].message,
-          variant: "destructive",
-        });
+        toast({ title: "Ошибка валидации", description: error.issues[0].message, variant: "destructive" });
       } else {
-        toast({
-          title: "Ошибка регистрации",
-          description: error.message || "Не удалось создать аккаунт",
-          variant: "destructive",
-        });
+        toast({ title: "Ошибка регистрации", description: error.message || "Не удалось создать аккаунт", variant: "destructive" });
       }
     } finally {
       setLoading(false);
@@ -104,50 +101,54 @@ const Auth = () => {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setBanMessage(null);
 
     try {
-      // Validate input
       const validatedData = signInSchema.parse({ email, password });
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email: validatedData.email,
         password: validatedData.password,
       });
 
       if (error) {
-        if (error.message.includes("Invalid login credentials")) {
-          throw new Error("Неверный email или пароль");
-        }
-        if (error.message.includes("Email not confirmed")) {
-          throw new Error("Email не подтвержден. Проверьте почту.");
-        }
+        if (error.message.includes("Invalid login credentials")) throw new Error("Неверный email или пароль");
+        if (error.message.includes("Email not confirmed")) throw new Error("Email не подтвержден. Проверьте почту.");
         throw error;
       }
 
       if (data.session) {
-        toast({
-          title: "С возвращением!",
-          description: "Вы успешно вошли в систему.",
-        });
+        // Ban check happens in onAuthStateChange -> checkBanAndRedirect
       }
     } catch (error: any) {
       if (error instanceof z.ZodError) {
-        toast({
-          title: "Ошибка валидации",
-          description: error.issues[0].message,
-          variant: "destructive",
-        });
+        toast({ title: "Ошибка валидации", description: error.issues[0].message, variant: "destructive" });
       } else {
-        toast({
-          title: "Ошибка входа",
-          description: error.message || "Не удалось войти",
-          variant: "destructive",
-        });
+        toast({ title: "Ошибка входа", description: error.message || "Не удалось войти", variant: "destructive" });
       }
     } finally {
       setLoading(false);
     }
   };
+
+  // Show ban screen
+  if (banMessage) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-destructive/10">
+        <div className="w-full max-w-md p-4">
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardHeader className="text-center">
+              <ShieldAlert className="w-16 h-16 text-destructive mx-auto mb-4" />
+              <CardTitle className="text-2xl text-destructive">Аккаунт заблокирован</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <p className="text-sm text-muted-foreground whitespace-pre-line">{banMessage}</p>
+              <Button variant="outline" onClick={() => setBanMessage(null)}>Попробовать другой аккаунт</Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/10 cyber-grid">
@@ -155,9 +156,7 @@ const Auth = () => {
         <div className="text-center mb-8 space-y-2">
           <div className="flex items-center justify-center gap-3 mb-4">
             <Tv className="w-10 h-10 text-primary animate-pulse" />
-            <h1 className="text-4xl font-display font-bold neon-text-primary">
-              StreamLiveTV
-            </h1>
+            <h1 className="text-4xl font-display font-bold neon-text-primary">StreamLiveTV</h1>
             <Radio className="w-10 h-10 text-secondary animate-pulse" />
           </div>
           <p className="text-muted-foreground">Создай собственный телеканал или радио</p>
@@ -166,9 +165,7 @@ const Auth = () => {
         <Card className="glass-strong border-primary/20">
           <CardHeader>
             <CardTitle className="text-2xl font-display">Вход в систему</CardTitle>
-            <CardDescription>
-              Войдите или создайте новый аккаунт
-            </CardDescription>
+            <CardDescription>Войдите или создайте новый аккаунт</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="signin" className="w-full">
@@ -181,35 +178,13 @@ const Auth = () => {
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="email-signin">Email</Label>
-                    <Input
-                      id="email-signin"
-                      type="email"
-                      placeholder="your@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      className="bg-background/50"
-                    />
+                    <Input id="email-signin" type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-background/50" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password-signin">Пароль</Label>
-                    <Input
-                      id="password-signin"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="bg-background/50"
-                    />
+                    <Input id="password-signin" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="bg-background/50" />
                   </div>
-                  <Button
-                    type="submit"
-                    className="w-full font-semibold"
-                    disabled={loading}
-                  >
-                    {loading ? "Загрузка..." : "Войти"}
-                  </Button>
+                  <Button type="submit" className="w-full font-semibold" disabled={loading}>{loading ? "Загрузка..." : "Войти"}</Button>
                 </form>
               </TabsContent>
 
@@ -217,48 +192,17 @@ const Auth = () => {
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="username">Имя пользователя</Label>
-                    <Input
-                      id="username"
-                      type="text"
-                      placeholder="username"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      required
-                      className="bg-background/50"
-                    />
+                    <Input id="username" type="text" placeholder="username" value={username} onChange={(e) => setUsername(e.target.value)} required className="bg-background/50" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="email-signup">Email</Label>
-                    <Input
-                      id="email-signup"
-                      type="email"
-                      placeholder="your@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      className="bg-background/50"
-                    />
+                    <Input id="email-signup" type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-background/50" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password-signup">Пароль</Label>
-                    <Input
-                      id="password-signup"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={6}
-                      className="bg-background/50"
-                    />
+                    <Input id="password-signup" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="bg-background/50" />
                   </div>
-                  <Button
-                    type="submit"
-                    className="w-full font-semibold"
-                    disabled={loading}
-                  >
-                    {loading ? "Создание..." : "Создать аккаунт"}
-                  </Button>
+                  <Button type="submit" className="w-full font-semibold" disabled={loading}>{loading ? "Создание..." : "Создать аккаунт"}</Button>
                 </form>
               </TabsContent>
             </Tabs>

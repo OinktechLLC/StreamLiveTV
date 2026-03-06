@@ -8,6 +8,8 @@
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
     #playerjs { width: 100%; height: 100%; }
     .loading { display: flex; align-items: center; justify-content: center; height: 100%; color: #fff; font-family: sans-serif; }
+    video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+    audio { width: 100%; margin-top: 40vh; }
   </style>
 </head>
 <body>
@@ -43,21 +45,130 @@
       try { config.file = JSON.parse(params.playlist); } catch(e) { config.file = params.playlist; }
     }
 
-    function initPlayer() {
-      if (typeof Playerjs !== 'undefined') {
-        new Playerjs(config);
-      } else {
-        var container = document.getElementById('playerjs');
-        if (config.file) {
-          var fileStr = typeof config.file === 'string' ? config.file : '';
-          if (fileStr.match(/\.(mp3|wav|ogg|aac)(\?|$)/i)) {
-            container.innerHTML = '<audio src="' + fileStr + '" controls autoplay style="width:100%;margin-top:40vh;"></audio>';
-          } else {
-            container.innerHTML = '<video src="' + fileStr + '" controls autoplay playsinline style="width:100%;height:100%;object-fit:contain;"></video>';
-          }
+    // Check if file is m3u/txt playlist that needs parsing
+    function isPlaylistFile(url) {
+      if (!url || typeof url !== 'string') return false;
+      return /\.(m3u|m3u8|txt)(\?|$)/i.test(url);
+    }
+
+    function isM3u8Stream(url) {
+      if (!url || typeof url !== 'string') return false;
+      return /\.m3u8(\?|$)/i.test(url);
+    }
+
+    // Parse m3u/txt playlist into array of stream URLs
+    function parsePlaylist(text) {
+      var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l && !l.startsWith('#'); });
+      return lines.filter(function(l) { return l.startsWith('http') || l.startsWith('/'); });
+    }
+
+    // HLS playback using native video or hls.js-like approach
+    function playHLS(url, videoEl) {
+      // Try native first (Safari)
+      if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+        videoEl.src = url;
+        videoEl.play().catch(function(){});
+        return;
+      }
+      // Fallback: just set src and hope browser handles it
+      videoEl.src = url;
+      videoEl.play().catch(function(){});
+    }
+
+    // Sequential playlist player
+    function PlaylistPlayer(urls, container) {
+      var self = this;
+      self.urls = urls;
+      self.index = 0;
+      self.container = container;
+
+      var video = document.createElement('video');
+      video.controls = true;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.style.cssText = 'width:100%;height:100%;object-fit:contain;';
+      container.innerHTML = '';
+      container.appendChild(video);
+      self.video = video;
+
+      video.addEventListener('ended', function() {
+        self.index = (self.index + 1) % self.urls.length;
+        self.play();
+      });
+
+      video.addEventListener('error', function() {
+        // Skip to next on error after 3 seconds
+        setTimeout(function() {
+          self.index = (self.index + 1) % self.urls.length;
+          self.play();
+        }, 3000);
+      });
+
+      self.play = function() {
+        var url = self.urls[self.index];
+        if (isM3u8Stream(url)) {
+          playHLS(url, self.video);
         } else {
-          container.innerHTML = '<div class="loading">No media source provided</div>';
+          self.video.src = url;
+          self.video.play().catch(function(){});
         }
+      };
+
+      self.play();
+    }
+
+    function initPlayer() {
+      var container = document.getElementById('playerjs');
+      var fileStr = typeof config.file === 'string' ? config.file : '';
+
+      // If it's a playlist file (m3u/txt), fetch and parse it
+      if (fileStr && isPlaylistFile(fileStr) && !isM3u8Stream(fileStr)) {
+        container.innerHTML = '<div class="loading">Загрузка плейлиста...</div>';
+        fetch(fileStr)
+          .then(function(r) { return r.text(); })
+          .then(function(text) {
+            var urls = parsePlaylist(text);
+            if (urls.length > 0) {
+              new PlaylistPlayer(urls, container);
+            } else {
+              // Maybe it's a single stream URL in the file
+              container.innerHTML = '<video src="' + fileStr + '" controls autoplay playsinline style="width:100%;height:100%;object-fit:contain;"></video>';
+            }
+          })
+          .catch(function() {
+            container.innerHTML = '<video src="' + fileStr + '" controls autoplay playsinline style="width:100%;height:100%;object-fit:contain;"></video>';
+          });
+        return;
+      }
+
+      // Try PlayerJS library first
+      if (typeof Playerjs !== 'undefined') {
+        try {
+          new Playerjs(config);
+          return;
+        } catch(e) {
+          console.warn('PlayerJS init error:', e);
+        }
+      }
+
+      // Fallback: native player
+      if (fileStr) {
+        if (fileStr.match(/\.(mp3|wav|ogg|aac)(\?|$)/i)) {
+          container.innerHTML = '<audio src="' + fileStr + '" controls autoplay style="width:100%;margin-top:40vh;"></audio>';
+        } else if (isM3u8Stream(fileStr)) {
+          var v = document.createElement('video');
+          v.controls = true;
+          v.autoplay = true;
+          v.playsInline = true;
+          v.style.cssText = 'width:100%;height:100%;object-fit:contain;';
+          container.innerHTML = '';
+          container.appendChild(v);
+          playHLS(fileStr, v);
+        } else {
+          container.innerHTML = '<video src="' + fileStr + '" controls autoplay playsinline style="width:100%;height:100%;object-fit:contain;"></video>';
+        }
+      } else {
+        container.innerHTML = '<div class="loading">Нет источника медиа</div>';
       }
     }
 
