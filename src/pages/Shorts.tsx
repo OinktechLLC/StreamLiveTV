@@ -73,6 +73,7 @@ const Shorts = () => {
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [liveViewerCounts, setLiveViewerCounts] = useState<Record<string, number>>({});
   const [sessionId] = useState(() => `shorts-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
+  const [playerKey, setPlayerKey] = useState(0);
 
   const {
     showConsentBanner, acceptConsent, declineConsent, trackView, scoreChannel,
@@ -102,12 +103,32 @@ const Shorts = () => {
           .from("media_content")
           .select("id, file_url, source_type, title, channel_id, is_24_7")
           .in("channel_id", batch)
+          .eq("is_24_7", true)
           .order("created_at", { ascending: true });
         if (mediaData) {
           mediaData.forEach((m: any) => {
             if (!mediaMap[m.channel_id]) mediaMap[m.channel_id] = [];
             mediaMap[m.channel_id].push(m);
           });
+        }
+      }
+      
+      // Fallback: if no is_24_7 media, get all media for channels that had none
+      const channelsWithoutMedia = channelIds.filter(id => !mediaMap[id] || mediaMap[id].length === 0);
+      if (channelsWithoutMedia.length > 0) {
+        for (let i = 0; i < channelsWithoutMedia.length; i += 30) {
+          const batch = channelsWithoutMedia.slice(i, i + 30);
+          const { data: mediaData } = await supabase
+            .from("media_content")
+            .select("id, file_url, source_type, title, channel_id, is_24_7")
+            .in("channel_id", batch)
+            .order("created_at", { ascending: true });
+          if (mediaData) {
+            mediaData.forEach((m: any) => {
+              if (!mediaMap[m.channel_id]) mediaMap[m.channel_id] = [];
+              mediaMap[m.channel_id].push(m);
+            });
+          }
         }
       }
     }
@@ -129,6 +150,8 @@ const Shorts = () => {
     });
     
     setChannels(scored);
+    setCurrentIndex(0);
+    setCurrentMediaIndex(0);
     setLoading(false);
   };
 
@@ -137,9 +160,10 @@ const Shorts = () => {
     if (ch) trackView(ch.id, ch.category_id || null, ch.channel_type, ch.title);
   }, [currentIndex, channels, trackView]);
 
-  // Reset media index when switching channels - NO auto-skip
+  // Reset media index when switching channels
   useEffect(() => {
     setCurrentMediaIndex(0);
+    setPlayerKey(prev => prev + 1);
   }, [currentIndex]);
 
   // Viewer heartbeat
@@ -151,7 +175,12 @@ const Shorts = () => {
       try {
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
         await supabase.from("channel_viewers").delete().eq("channel_id", channelId).lt("last_seen", fiveMinutesAgo);
-        await supabase.from("channel_viewers").insert({ channel_id: channelId, user_id: user?.id || null, session_id: sessionId, last_seen: new Date().toISOString() });
+        await supabase.from("channel_viewers").insert({ 
+          channel_id: channelId, 
+          user_id: user?.id || null, 
+          session_id: sessionId, 
+          last_seen: new Date().toISOString() 
+        });
       } catch (e) { console.error("Viewer register error:", e); }
     };
     const fetchViewerCount = async () => {
@@ -228,6 +257,21 @@ const Shorts = () => {
     setTouchStart(null);
   };
 
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown" && currentIndex < channels.length - 1) {
+        e.preventDefault();
+        setCurrentIndex(prev => prev + 1);
+      } else if (e.key === "ArrowUp" && currentIndex > 0) {
+        e.preventDefault();
+        setCurrentIndex(prev => prev - 1);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentIndex, channels.length]);
+
   const handleLike = async () => {
     if (!user || !channels[currentIndex]) return;
     const channelId = channels[currentIndex].id;
@@ -259,11 +303,12 @@ const Shorts = () => {
     }
   };
 
-  // Continuous broadcast: cycle through media - NO auto-skip on error
+  // Continuous broadcast: cycle through media
   const handleMediaEnded = () => {
     const sources = mediaByChannel[channels[currentIndex]?.id] || [];
     if (sources.length > 1) {
       setCurrentMediaIndex(prev => (prev + 1) % sources.length);
+      setPlayerKey(prev => prev + 1);
     }
   };
 
@@ -307,14 +352,14 @@ const Shorts = () => {
       <div className="absolute inset-0">
         {currentMedia ? (
           <UniversalPlayer
-            key={`shorts-${currentChannel.id}-${currentMedia.id}-${safeMediaIndex}`}
+            key={`shorts-${currentChannel.id}-${currentMedia.id}-${playerKey}`}
             src={currentMedia.file_url}
             sourceType={(currentMedia.source_type as SourceType) || "mp4"}
             title={currentMedia.title}
             channelType={currentChannel.channel_type}
             autoPlay={true}
             muted={muted}
-            useProxy={true}
+            useProxy={false}
             onEnded={handleMediaEnded}
             className="w-full h-full object-cover"
           />
@@ -335,12 +380,12 @@ const Shorts = () => {
       {/* Navigation Arrows */}
       <div className="absolute top-1/2 -translate-y-1/2 right-4 flex flex-col gap-4 z-20">
         {currentIndex > 0 && (
-          <button onClick={() => setCurrentIndex(currentIndex - 1)} className="p-2 bg-white/20 rounded-full">
+          <button onClick={() => setCurrentIndex(currentIndex - 1)} className="p-2 bg-white/20 rounded-full backdrop-blur-sm">
             <ChevronUp className="w-5 h-5 text-white" />
           </button>
         )}
         {currentIndex < channels.length - 1 && (
-          <button onClick={() => setCurrentIndex(currentIndex + 1)} className="p-2 bg-white/20 rounded-full">
+          <button onClick={() => setCurrentIndex(currentIndex + 1)} className="p-2 bg-white/20 rounded-full backdrop-blur-sm">
             <ChevronDown className="w-5 h-5 text-white" />
           </button>
         )}
@@ -410,31 +455,27 @@ const Shorts = () => {
                   <AvatarFallback className="text-xs">{msg.profiles?.username?.[0]?.toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <span className="text-primary text-xs font-semibold">{msg.profiles?.username}</span>
-                  <p className="text-white text-sm">{msg.message}</p>
+                  <span className="text-xs text-primary font-medium">{msg.profiles?.username}</span>
+                  <p className="text-sm text-white/90">{msg.message}</p>
                 </div>
               </div>
             ))}
           </div>
           {user ? (
-            <form onSubmit={handleSendMessage} className="flex gap-2 p-3 border-t border-white/10">
-              <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Сообщение..." className="flex-1 bg-white/10 border-white/20 text-white placeholder:text-white/50" />
-              <Button type="submit" size="icon" disabled={!newMessage.trim()}><Send className="w-4 h-4" /></Button>
+            <form onSubmit={handleSendMessage} className="p-3 border-t border-white/10 flex gap-2">
+              <Input
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Сообщение..."
+                className="flex-1 bg-white/10 border-white/20 text-white placeholder:text-white/50"
+              />
+              <Button type="submit" size="sm"><Send className="w-4 h-4" /></Button>
             </form>
           ) : (
-            <div className="p-3 text-center border-t border-white/10">
-              <p className="text-white/50 text-sm">Войдите, чтобы писать в чат</p>
-            </div>
+            <div className="p-3 text-center text-white/50 text-sm">Войдите, чтобы писать в чат</div>
           )}
         </div>
       )}
-
-      {/* Position indicator */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20">
-        <span className="text-white/50 text-xs bg-black/30 px-3 py-1 rounded-full">
-          {currentIndex + 1} / {channels.length}
-        </span>
-      </div>
     </div>
   );
 };

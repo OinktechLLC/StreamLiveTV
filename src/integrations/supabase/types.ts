@@ -90,6 +90,33 @@ export type Database = {
           },
         ]
       }
+      banned_users: {
+        Row: {
+          banned_at: string
+          banned_by: string | null
+          id: string
+          reason: string
+          rule_code: string | null
+          user_id: string
+        }
+        Insert: {
+          banned_at?: string
+          banned_by?: string | null
+          id?: string
+          reason?: string
+          rule_code?: string | null
+          user_id: string
+        }
+        Update: {
+          banned_at?: string
+          banned_by?: string | null
+          id?: string
+          reason?: string
+          rule_code?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       channel_appeals: {
         Row: {
           ai_decision: string | null
