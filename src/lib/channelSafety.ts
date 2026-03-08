@@ -18,6 +18,12 @@ const DUPLICATE_REASON_KEYWORDS = [
 
 const normalize = (value: string | null | undefined) => (value || "").trim().toLowerCase();
 
+const normalizeForDuplicateKey = (value: string | null | undefined) =>
+  normalize(value)
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
 const LOW_QUALITY_DESCRIPTIONS = new Set([
   "да",
   "ага",
@@ -138,22 +144,46 @@ interface DeduplicateInput {
   title?: string | null;
   channel_type?: string | null;
   viewer_count?: number | null;
+  username?: string | null;
+  profiles?: {
+    username?: string | null;
+  } | null;
 }
+
+const getChannelUsername = <T extends DeduplicateInput>(channel: T) => {
+  return channel.username ?? channel.profiles?.username ?? null;
+};
+
+const shouldCurrentChannelWin = <T extends DeduplicateInput>(current: T, existing: T) => {
+  const currentIsOfficial = isOfficialProtectedAccount(getChannelUsername(current));
+  const existingIsOfficial = isOfficialProtectedAccount(getChannelUsername(existing));
+
+  if (currentIsOfficial !== existingIsOfficial) {
+    return currentIsOfficial;
+  }
+
+  const currentViewerCount = current.viewer_count || 0;
+  const existingViewerCount = existing.viewer_count || 0;
+  return currentViewerCount > existingViewerCount;
+};
 
 export const deduplicateChannelsByTitle = <T extends DeduplicateInput>(channels: T[]): T[] => {
   const winners = new Map<string, T>();
 
   for (const channel of channels) {
-    const key = `${normalize(channel.title)}|${normalize(channel.channel_type)}`;
+    const titleKey = normalizeForDuplicateKey(channel.title);
+    if (!titleKey) {
+      continue;
+    }
+
+    const key = `${titleKey}|${normalize(channel.channel_type)}`;
     const existing = winners.get(key);
     if (!existing) {
       winners.set(key, channel);
       continue;
     }
 
-    const currentViewerCount = channel.viewer_count || 0;
-    const existingViewerCount = existing.viewer_count || 0;
-    if (currentViewerCount > existingViewerCount) {
+    if (shouldCurrentChannelWin(channel, existing)) {
       winners.set(key, channel);
     }
   }

@@ -99,6 +99,31 @@ interface DeletedChannel {
   deleted_at: string;
 }
 
+const DEFAULT_PAGE_TITLE = "StreamLiveTV";
+const DEFAULT_PAGE_DESCRIPTION = "Смотри ТВ и радио каналы онлайн";
+
+const CHANNEL_META_DESCRIPTION_SUFFIX = "Бесплатно без смс и регистрации в 4к качестве";
+
+const upsertMetaTag = (name: string, content: string) => {
+  let element = document.head.querySelector(`meta[name=\"${name}\"]`) as HTMLMetaElement | null;
+  if (!element) {
+    element = document.createElement("meta");
+    element.setAttribute("name", name);
+    document.head.appendChild(element);
+  }
+  element.setAttribute("content", content);
+};
+
+const upsertMetaProperty = (property: string, content: string) => {
+  let element = document.head.querySelector(`meta[property=\"${property}\"]`) as HTMLMetaElement | null;
+  if (!element) {
+    element = document.createElement("meta");
+    element.setAttribute("property", property);
+    document.head.appendChild(element);
+  }
+  element.setAttribute("content", content);
+};
+
 const ChannelView = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -289,6 +314,30 @@ const ChannelView = () => {
       setRestreamUrl("");
     }
   }, [channel?.streaming_method, channel?.mux_playback_id, channel?.stream_key]);
+
+  useEffect(() => {
+    const canonicalUrl = `${window.location.origin}/channel/${id}`;
+    let canonical = document.head.querySelector("link[rel='canonical']") as HTMLLinkElement | null;
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.setAttribute("rel", "canonical");
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute("href", canonicalUrl);
+
+    if (!channel?.title) {
+      document.title = DEFAULT_PAGE_TITLE;
+      upsertMetaTag("description", DEFAULT_PAGE_DESCRIPTION);
+      return;
+    }
+
+    const channelTitle = channel.title.trim();
+    const seoDescription = `Смотреть ${channelTitle} ${CHANNEL_META_DESCRIPTION_SUFFIX}`;
+    document.title = `${channelTitle} — StreamLiveTV`;
+    upsertMetaTag("description", seoDescription);
+    upsertMetaProperty("og:title", `${channelTitle} — StreamLiveTV`);
+    upsertMetaProperty("og:description", seoDescription);
+  }, [channel?.title, id]);
 
   const fetchChannel = async () => {
     if (!id) return;
