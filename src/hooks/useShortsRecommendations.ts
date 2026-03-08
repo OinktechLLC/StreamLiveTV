@@ -139,45 +139,48 @@ export function useShortsRecommendations(userId?: string | null) {
    */
   const scoreChannel = useCallback(
     (channel: { id: string; title: string; description: string | null; category_id: string | null; channel_type: "tv" | "radio" }): number => {
-      if (!consentGiven) return 0;
-
       let score = 0;
 
+      const canUseBehavioralSignals = consentGiven === true;
+
       try {
-        // Category match from view history
-        const viewRaw = localStorage.getItem(withUserScope(VIEW_HISTORY_KEY, userId));
-        const viewHistory: ViewEntry[] = viewRaw ? JSON.parse(viewRaw) : [];
-
-        // Count category appearances (more recent = higher weight)
         const now = Date.now();
-        for (const entry of viewHistory) {
-          if (entry.categoryId && entry.categoryId === channel.category_id) {
-            // Recency weight: last 24h = 3x, last week = 2x, older = 1x
-            const ageHours = (now - entry.ts) / (1000 * 60 * 60);
-            if (ageHours < 24) score += 3;
-            else if (ageHours < 168) score += 2;
-            else score += 1;
-          }
-          // Same channel type preference
-          if (entry.channelType === channel.channel_type) {
-            score += 0.5;
-          }
-        }
-
-        // Search keyword match
-        const searchRaw = localStorage.getItem(withUserScope(SEARCH_HISTORY_KEY, userId));
-        const searchHistory: SearchEntry[] = searchRaw ? JSON.parse(searchRaw) : [];
         const titleLower = (channel.title || "").toLowerCase();
         const descLower = (channel.description || "").toLowerCase();
 
-        for (const entry of searchHistory) {
-          const q = entry.query;
-          if (q.length < 2) continue;
-          if (titleLower.includes(q) || descLower.includes(q)) {
-            const ageHours = (now - entry.ts) / (1000 * 60 * 60);
-            if (ageHours < 24) score += 5;
-            else if (ageHours < 168) score += 3;
-            else score += 1;
+        if (canUseBehavioralSignals) {
+          // Category match from view history
+          const viewRaw = localStorage.getItem(withUserScope(VIEW_HISTORY_KEY, userId));
+          const viewHistory: ViewEntry[] = viewRaw ? JSON.parse(viewRaw) : [];
+
+          // Count category appearances (more recent = higher weight)
+          for (const entry of viewHistory) {
+            if (entry.categoryId && entry.categoryId === channel.category_id) {
+              // Recency weight: last 24h = 3x, last week = 2x, older = 1x
+              const ageHours = (now - entry.ts) / (1000 * 60 * 60);
+              if (ageHours < 24) score += 3;
+              else if (ageHours < 168) score += 2;
+              else score += 1;
+            }
+            // Same channel type preference
+            if (entry.channelType === channel.channel_type) {
+              score += 0.5;
+            }
+          }
+
+          // Search keyword match
+          const searchRaw = localStorage.getItem(withUserScope(SEARCH_HISTORY_KEY, userId));
+          const searchHistory: SearchEntry[] = searchRaw ? JSON.parse(searchRaw) : [];
+
+          for (const entry of searchHistory) {
+            const q = entry.query;
+            if (q.length < 2) continue;
+            if (titleLower.includes(q) || descLower.includes(q)) {
+              const ageHours = (now - entry.ts) / (1000 * 60 * 60);
+              if (ageHours < 24) score += 5;
+              else if (ageHours < 168) score += 3;
+              else score += 1;
+            }
           }
         }
 
@@ -185,7 +188,7 @@ export function useShortsRecommendations(userId?: string | null) {
           const contentTokens = new Set(splitToTokens(`${channel.title || ""} ${channel.description || ""}`));
           for (const tag of interestTags) {
             if (contentTokens.has(tag)) {
-              score += 8;
+              score += 15;
             }
           }
         }
