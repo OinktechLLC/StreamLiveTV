@@ -3,8 +3,9 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import EnhancedLiveChat from "@/components/EnhancedLiveChat";
-import { Radio as RadioIcon, Lock } from "lucide-react";
+import { Radio as RadioIcon, Lock, AlertTriangle } from "lucide-react";
 import UniversalPlayer, { SourceType } from "@/components/UniversalPlayer";
+import { getDiscoveryCensorshipReason, shouldCensorChannelFromDiscovery } from "@/lib/channelSafety";
 
 interface Channel {
   id: string;
@@ -16,6 +17,12 @@ interface Channel {
   thumbnail_url: string | null;
   user_id: string;
   paid_only: boolean;
+  is_hidden: boolean;
+  hidden_reason: string | null;
+  description: string | null;
+  profiles?: {
+    username: string;
+  } | null;
 }
 
 interface MediaContent {
@@ -49,7 +56,7 @@ const PopoutPlayer = () => {
   const fetchData = async () => {
     if (!id) return;
     try {
-      const { data: channelData } = await supabase.from("channels").select("id, title, channel_type, streaming_method, mux_playback_id, stream_key, thumbnail_url, user_id, paid_only").eq("id", id).single();
+      const { data: channelData } = await supabase.from("channels").select("id, title, channel_type, streaming_method, mux_playback_id, stream_key, thumbnail_url, user_id, paid_only, is_hidden, hidden_reason, description, profiles:user_id(username)").eq("id", id).single();
       if (channelData) {
         setChannel(channelData as Channel);
         if (channelData.streaming_method !== "live") {
@@ -65,6 +72,35 @@ const PopoutPlayer = () => {
 
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-pulse text-foreground">Загрузка...</div></div>;
   if (!channel) return <div className="min-h-screen bg-background flex items-center justify-center"><p className="text-foreground">Канал не найден</p></div>;
+
+  const isBlocked = shouldCensorChannelFromDiscovery({
+    username: channel.profiles?.username,
+    title: channel.title,
+    description: channel.description,
+    isHidden: channel.is_hidden,
+    hiddenReason: channel.hidden_reason,
+  });
+  const blockReason = getDiscoveryCensorshipReason({
+    username: channel.profiles?.username,
+    title: channel.title,
+    description: channel.description,
+    isHidden: channel.is_hidden,
+    hiddenReason: channel.hidden_reason,
+  });
+
+  if (isBlocked) {
+    const ownerMessage = user?.id && user.id === channel.user_id;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="text-center max-w-md">
+          <AlertTriangle className="w-14 h-14 text-destructive mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">{ownerMessage ? "Ваш канал был заблокирован" : "Данный канал больше не доступен"}</h2>
+          {blockReason && <p className="text-sm text-destructive mb-2">Причина: {blockReason}</p>}
+          <p className="text-muted-foreground text-sm">Канал недоступен в Popout-плеере.</p>
+        </div>
+      </div>
+    );
+  }
 
   const currentMedia = mediaContent[currentIndex];
 

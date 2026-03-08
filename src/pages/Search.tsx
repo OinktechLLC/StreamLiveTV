@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Search as SearchIcon, Tv, Radio } from "lucide-react";
 import { useShortsRecommendations } from "@/hooks/useShortsRecommendations";
-import { deduplicateChannelsByTitle, hasBlockedModerationReason, isBlockedDuplicateChannel } from "@/lib/channelSafety";
+import { deduplicateChannelsByTitle, shouldCensorChannelFromDiscovery } from "@/lib/channelSafety";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Channel {
   id: string;
@@ -25,10 +26,11 @@ interface Channel {
 
 const Search = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(false);
-  const { trackSearch } = useShortsRecommendations();
+  const { trackSearch } = useShortsRecommendations(user?.id);
 
   useEffect(() => {
     const q = searchParams.get("q");
@@ -81,8 +83,7 @@ const Search = () => {
       
       const cleanData = (data || [])
         .filter((channel: any) => !bannedUsers.has(channel.user_id))
-        .filter((channel: any) => !hasBlockedModerationReason(channel.hidden_reason))
-        .filter((channel: any) => !isBlockedDuplicateChannel({
+        .filter((channel: any) => !shouldCensorChannelFromDiscovery({
           username: channel.profiles?.username,
           title: channel.title,
           description: channel.description,
