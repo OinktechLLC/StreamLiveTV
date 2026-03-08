@@ -50,7 +50,7 @@ import ChannelHiddenNotice from "@/components/ChannelHiddenNotice";
 import { useScheduledPlayback } from "@/hooks/useScheduledPlayback";
 import { Film, Download, Crown, Dices, Lock, Zap } from "lucide-react";
 import PaidContentGate from "@/components/PaidContentGate";
-import { BLOCKED_CHANNEL_TEXT, isBlockedDuplicateChannel } from "@/lib/channelSafety";
+import { BLOCKED_CHANNEL_TEXT, getDiscoveryCensorshipReason, shouldCensorChannelFromDiscovery } from "@/lib/channelSafety";
 
 interface Channel {
   id: string;
@@ -745,7 +745,14 @@ const ChannelView = () => {
   const canManage = isOwner || isAdmin; // admin has nearly full access
   const canStream = isOwner || isAdmin || isHost; // host can only stream
 
-  const isBlockedAsDuplicate = isBlockedDuplicateChannel({
+  const discoveryBlockReason = getDiscoveryCensorshipReason({
+    username: channel.profiles?.username,
+    title: channel.title,
+    description: channel.description,
+    isHidden: channel.is_hidden,
+    hiddenReason: channel.hidden_reason,
+  });
+  const isBlockedForView = shouldCensorChannelFromDiscovery({
     username: channel.profiles?.username,
     title: channel.title,
     description: channel.description,
@@ -753,15 +760,16 @@ const ChannelView = () => {
     hiddenReason: channel.hidden_reason,
   });
 
-  if (isBlockedAsDuplicate) {
+  if (isBlockedForView) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
         <div className="flex items-center justify-center h-[60vh] px-4">
           <div className="text-center max-w-xl p-8 border border-destructive/30 rounded-xl bg-destructive/5">
             <Trash2 className="w-16 h-16 text-destructive mx-auto mb-4" />
-            <h1 className="text-2xl font-bold mb-2">Канал заблокирован</h1>
-            <p className="text-muted-foreground mb-4">{BLOCKED_CHANNEL_TEXT}</p>
+            <h1 className="text-2xl font-bold mb-2">{isOwner ? "Ваш канал был заблокирован" : "Данный канал больше не доступен"}</h1>
+            <p className="text-muted-foreground mb-2">{isOwner ? BLOCKED_CHANNEL_TEXT : "Канал скрыт и недоступен для просмотра."}</p>
+            {discoveryBlockReason && <p className="text-sm text-destructive font-medium mb-4">Причина: {discoveryBlockReason}</p>}
             <Button onClick={() => navigate("/search")} variant="outline">
               Перейти к поиску
             </Button>

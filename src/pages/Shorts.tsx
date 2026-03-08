@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import UniversalPlayer, { SourceType } from "@/components/UniversalPlayer";
 import DataConsentBanner from "@/components/DataConsentBanner";
 import { useShortsRecommendations } from "@/hooks/useShortsRecommendations";
-import { deduplicateChannelsByTitle, hasBlockedModerationReason, isBlockedDuplicateChannel } from "@/lib/channelSafety";
+import { deduplicateChannelsByTitle, shouldCensorChannelFromDiscovery } from "@/lib/channelSafety";
 
 interface Channel {
   id: string;
@@ -89,7 +89,7 @@ const Shorts = () => {
     interestTags,
     saveInterestTags,
     clearRecommendationProfile,
-  } = useShortsRecommendations();
+  } = useShortsRecommendations(user?.id);
 
   useEffect(() => {
     setInterestInput(interestTags.join(", "));
@@ -105,7 +105,7 @@ const Shorts = () => {
       .select(`id, title, description, thumbnail_url, channel_type, is_live, viewer_count, user_id, created_at, category_id, is_hidden, hidden_reason, profiles:user_id (username, avatar_url)`)
       .eq("is_hidden", false)
       .order("viewer_count", { ascending: false })
-      .limit(100);
+      .limit(250);
 
     if (error || !data) { setLoading(false); return; }
 
@@ -162,15 +162,14 @@ const Shorts = () => {
 
     const withMedia = (data as any[])
       .filter((ch) => !bannedUsers.has(ch.user_id))
-      .filter((ch) => !hasBlockedModerationReason(ch.hidden_reason))
-      .filter((ch) => !isBlockedDuplicateChannel({
+      .filter((ch) => !shouldCensorChannelFromDiscovery({
         username: ch.profiles?.username,
         title: ch.title,
         description: ch.description,
         isHidden: ch.is_hidden,
         hiddenReason: ch.hidden_reason,
       }))
-      .filter(ch => (mediaMap[ch.id] || []).length > 0);
+      .filter((ch) => ch.is_live || (mediaMap[ch.id] || []).length > 0);
     const deduped = deduplicateChannelsByTitle(withMedia as any[]);
 
     const scored = deduped.map((ch: any) => ({ ...ch, _score: scoreChannel(ch) }));

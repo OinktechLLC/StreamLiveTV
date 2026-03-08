@@ -26,13 +26,17 @@ const splitToTokens = (value: string) =>
     .map((token) => token.trim())
     .filter((token) => token.length >= 2);
 
-export function useShortsRecommendations() {
+const withUserScope = (baseKey: string, userId?: string | null) => (userId ? `${baseKey}:${userId}` : baseKey);
+
+export function useShortsRecommendations(userId?: string | null) {
   const [consentGiven, setConsentGiven] = useState<boolean | null>(null);
   const [showConsentBanner, setShowConsentBanner] = useState(false);
   const [interestTags, setInterestTags] = useState<string[]>([]);
 
   useEffect(() => {
-    const stored = localStorage.getItem(CONSENT_KEY);
+    const scopedConsentKey = withUserScope(CONSENT_KEY, userId);
+    const scopedInterestsKey = withUserScope(INTERESTS_KEY, userId);
+    const stored = localStorage.getItem(scopedConsentKey);
     if (stored === "true") {
       setConsentGiven(true);
       setShowConsentBanner(false);
@@ -46,7 +50,7 @@ export function useShortsRecommendations() {
     }
 
     try {
-      const rawInterests = localStorage.getItem(INTERESTS_KEY);
+      const rawInterests = localStorage.getItem(scopedInterestsKey);
       if (rawInterests) {
         const parsed = JSON.parse(rawInterests);
         if (Array.isArray(parsed)) {
@@ -56,77 +60,77 @@ export function useShortsRecommendations() {
     } catch {
       // silently fail
     }
-  }, []);
+  }, [userId]);
 
   const acceptConsent = useCallback(() => {
-    localStorage.setItem(CONSENT_KEY, "true");
+    localStorage.setItem(withUserScope(CONSENT_KEY, userId), "true");
     setConsentGiven(true);
     setShowConsentBanner(false);
-  }, []);
+  }, [userId]);
 
   const declineConsent = useCallback(() => {
-    localStorage.setItem(CONSENT_KEY, "false");
+    localStorage.setItem(withUserScope(CONSENT_KEY, userId), "false");
     setConsentGiven(false);
     setShowConsentBanner(false);
     // Clear any existing data
-    localStorage.removeItem(VIEW_HISTORY_KEY);
-    localStorage.removeItem(SEARCH_HISTORY_KEY);
-    localStorage.removeItem(INTERESTS_KEY);
+    localStorage.removeItem(withUserScope(VIEW_HISTORY_KEY, userId));
+    localStorage.removeItem(withUserScope(SEARCH_HISTORY_KEY, userId));
+    localStorage.removeItem(withUserScope(INTERESTS_KEY, userId));
     setInterestTags([]);
-  }, []);
+  }, [userId]);
 
   const saveInterestTags = useCallback((tags: string[]) => {
     const cleaned = Array.from(new Set(tags.map((tag) => tag.trim().toLowerCase()).filter((tag) => tag.length >= 2))).slice(0, 20);
     setInterestTags(cleaned);
     try {
-      localStorage.setItem(INTERESTS_KEY, JSON.stringify(cleaned));
+      localStorage.setItem(withUserScope(INTERESTS_KEY, userId), JSON.stringify(cleaned));
     } catch {
       // silently fail
     }
-  }, []);
+  }, [userId]);
 
   const clearRecommendationProfile = useCallback(() => {
     try {
-      localStorage.removeItem(VIEW_HISTORY_KEY);
-      localStorage.removeItem(SEARCH_HISTORY_KEY);
-      localStorage.removeItem(INTERESTS_KEY);
+      localStorage.removeItem(withUserScope(VIEW_HISTORY_KEY, userId));
+      localStorage.removeItem(withUserScope(SEARCH_HISTORY_KEY, userId));
+      localStorage.removeItem(withUserScope(INTERESTS_KEY, userId));
     } catch {
       // silently fail
     }
     setInterestTags([]);
-  }, []);
+  }, [userId]);
 
   const trackView = useCallback(
     (channelId: string, categoryId: string | null, channelType: "tv" | "radio", title: string) => {
       if (!consentGiven) return;
       try {
-        const raw = localStorage.getItem(VIEW_HISTORY_KEY);
+        const raw = localStorage.getItem(withUserScope(VIEW_HISTORY_KEY, userId));
         const history: ViewEntry[] = raw ? JSON.parse(raw) : [];
         history.push({ channelId, categoryId, channelType, title, ts: Date.now() });
         // Keep only last MAX_HISTORY entries
         const trimmed = history.slice(-MAX_HISTORY);
-        localStorage.setItem(VIEW_HISTORY_KEY, JSON.stringify(trimmed));
+        localStorage.setItem(withUserScope(VIEW_HISTORY_KEY, userId), JSON.stringify(trimmed));
       } catch {
         // silently fail
       }
     },
-    [consentGiven]
+    [consentGiven, userId]
   );
 
   const trackSearch = useCallback(
     (query: string) => {
       if (!consentGiven) return;
       try {
-        const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
+        const raw = localStorage.getItem(withUserScope(SEARCH_HISTORY_KEY, userId));
         const history: SearchEntry[] = raw ? JSON.parse(raw) : [];
         history.push({ query: query.toLowerCase().trim(), ts: Date.now() });
         const trimmed = history.slice(-MAX_HISTORY);
-        localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(trimmed));
+        localStorage.setItem(withUserScope(SEARCH_HISTORY_KEY, userId), JSON.stringify(trimmed));
       } catch {
         // silently fail
       }
     },
-    [consentGiven]
+    [consentGiven, userId]
   );
 
   /**
@@ -141,7 +145,7 @@ export function useShortsRecommendations() {
 
       try {
         // Category match from view history
-        const viewRaw = localStorage.getItem(VIEW_HISTORY_KEY);
+        const viewRaw = localStorage.getItem(withUserScope(VIEW_HISTORY_KEY, userId));
         const viewHistory: ViewEntry[] = viewRaw ? JSON.parse(viewRaw) : [];
 
         // Count category appearances (more recent = higher weight)
@@ -161,7 +165,7 @@ export function useShortsRecommendations() {
         }
 
         // Search keyword match
-        const searchRaw = localStorage.getItem(SEARCH_HISTORY_KEY);
+        const searchRaw = localStorage.getItem(withUserScope(SEARCH_HISTORY_KEY, userId));
         const searchHistory: SearchEntry[] = searchRaw ? JSON.parse(searchRaw) : [];
         const titleLower = (channel.title || "").toLowerCase();
         const descLower = (channel.description || "").toLowerCase();
@@ -191,7 +195,7 @@ export function useShortsRecommendations() {
 
       return score;
     },
-    [consentGiven, interestTags]
+    [consentGiven, interestTags, userId]
   );
 
   return {

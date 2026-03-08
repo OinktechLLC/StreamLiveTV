@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Radio as RadioIcon, Lock } from "lucide-react";
+import { Radio as RadioIcon, Lock, AlertTriangle } from "lucide-react";
 import UniversalPlayer, { SourceType } from "@/components/UniversalPlayer";
+import { getDiscoveryCensorshipReason, shouldCensorChannelFromDiscovery } from "@/lib/channelSafety";
 
 interface Channel {
   id: string;
@@ -16,6 +17,12 @@ interface Channel {
   is_live: boolean;
   paid_only: boolean;
   user_id: string;
+  is_hidden: boolean;
+  hidden_reason: string | null;
+  description: string | null;
+  profiles?: {
+    username: string;
+  } | null;
 }
 
 interface MediaContent {
@@ -62,7 +69,7 @@ const EmbedPlayer = () => {
     try {
       const { data: channelData, error: channelError } = await supabase
         .from("channels")
-        .select("id, title, channel_type, streaming_method, mux_playback_id, stream_key, thumbnail_url, is_live, paid_only, user_id")
+        .select("id, title, channel_type, streaming_method, mux_playback_id, stream_key, thumbnail_url, is_live, paid_only, user_id, is_hidden, hidden_reason, description, profiles:user_id(username)")
         .eq("id", id)
         .single();
       if (channelError) throw channelError;
@@ -87,6 +94,35 @@ const EmbedPlayer = () => {
 
   if (!channel) {
     return <div className="w-full h-full flex items-center justify-center bg-background"><p className="text-foreground">Канал не найден</p></div>;
+  }
+
+  const isBlocked = shouldCensorChannelFromDiscovery({
+    username: channel.profiles?.username,
+    title: channel.title,
+    description: channel.description,
+    isHidden: channel.is_hidden,
+    hiddenReason: channel.hidden_reason,
+  });
+  const blockReason = getDiscoveryCensorshipReason({
+    username: channel.profiles?.username,
+    title: channel.title,
+    description: channel.description,
+    isHidden: channel.is_hidden,
+    hiddenReason: channel.hidden_reason,
+  });
+
+  if (isBlocked) {
+    const ownerMessage = user?.id && user.id === channel.user_id;
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-background">
+        <div className="text-center p-8 max-w-md">
+          <AlertTriangle className="w-14 h-14 text-destructive mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">{ownerMessage ? "Ваш канал был заблокирован" : "Данный канал больше не доступен"}</h2>
+          {blockReason && <p className="text-sm text-destructive mb-2">Причина: {blockReason}</p>}
+          <p className="text-muted-foreground text-sm">Этот канал недоступен в Embed-плеере.</p>
+        </div>
+      </div>
+    );
   }
 
   // Paid content gate for embed
