@@ -856,7 +856,7 @@ const ChannelView = () => {
           <div className="text-center max-w-xl p-8 border border-destructive/30 rounded-xl bg-destructive/5">
             <Trash2 className="w-16 h-16 text-destructive mx-auto mb-4" />
             <h1 className="text-2xl font-bold mb-2">{isOwner ? "Ваш канал был заблокирован" : "Данный канал больше не доступен"}</h1>
-            <p className="text-muted-foreground mb-2">{isOwner ? BLOCKED_CHANNEL_TEXT : "Канал скрыт и недоступен для просмотра."}</p>
+            <p className="text-muted-foreground mb-2">{isOwner ? BLOCKED_CHANNEL_TEXT : "Канал заблокирован. Причина: низкое качество или нарушение правил платформы."}</p>
             {discoveryBlockReason && <p className="text-sm text-destructive font-medium mb-4">Причина: {discoveryBlockReason}</p>}
             <Button onClick={() => navigate("/search")} variant="outline">
               Перейти к поиску

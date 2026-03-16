@@ -8,12 +8,28 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const enforceBan = async (userId: string | undefined) => {
+      if (!userId) return;
+
+      const { data: ban } = await supabase
+        .from("banned_users")
+        .select("id")
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle();
+
+      if (ban) {
+        await supabase.auth.signOut();
+      }
+    };
+
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        void enforceBan(session?.user?.id);
       }
     );
 
@@ -22,6 +38,7 @@ export const useAuth = () => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      void enforceBan(session?.user?.id);
     });
 
     return () => subscription.unsubscribe();
