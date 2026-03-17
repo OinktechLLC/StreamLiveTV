@@ -230,8 +230,8 @@
                 let id = url.match(/\/video\/([a-f0-9]+)/)?.[1];
                 embed = `https://rutube.ru/play/embed/${id}?autoplay=1&mute=0&skinColor=00000000&parent=oinktech.blyz.ru`;
             }
-            else if (url.includes('embed') || url.includes('embedstreamlivetv'  || url.includes('embesslivestudio.lovable.app')  || url.includes('embedss')  || url.includes('embess')) {
-                p = 'StreamLiveTV (partner)';
+            else if (url.includes('embed') || url.includes('embedstreamlivetv') || url.includes('embesslivestudio.lovable.app') || url.includes('embedss') || url.includes('embess')) {
+				p = 'StreamLiveTV (partner)';
                 let id = url.split('/').pop().split('?')[0];
                 embed = `https://embesslivestudio.lovable.app/player?channel=${id}`;
             }
