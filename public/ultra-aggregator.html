@@ -157,12 +157,8 @@
             let p = 'link', embed = '', crop = 'standard';
             if (url.includes('twitch.tv')) {
                 p = 'twitch';
-                    if (url.includes('/videos/')) {
-                        id = url.split('/videos/')[1]?.split('?')[0];
-                        embed = `https://player.twitch.tv/?video=${id}&parent=${parent}&autoplay=true`;
-                    } else {
-                        let channel = url.split('/').pop().split('?')[0];
-                        embed = `https://player.twitch.tv/?channel=${channel}&parent=${parent}&autoplay=true`;
+                let channel = url.split('/').pop().split('?')[0];
+                embed = `https://player.twitch.tv/?channel=${channel}&parent=$oinktech.blyz.ru&autoplay=true`;
             } 
             else if (url.includes('kick.com')) {
                 p = 'kick';
