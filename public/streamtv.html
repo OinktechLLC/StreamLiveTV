@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StreamTV — Прямые эфиры</title>
+<title>streamtvlive.github.io</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="StreamTV">
+<meta name="theme-color" content="#080c14">
+<title>StreamTV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#080c14; --bg2:#0d1220; --bg3:#141926; --bg4:#1a2133;
+  --accent:#e8303a; --text:#f0f4ff; --text2:#8a9bb8; --text3:#4a5a7a;
+  --border:#1e2a40; --glow:rgba(232,48,58,.3);
+  --r:12px; --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:'Manrope',sans-serif;
+  background:var(--bg); color:var(--text);
+  display:flex; flex-direction:column;
+  /* мобильная высота с учётом safe area */
+  height: 100dvh;
+}
+
+/* ═══ HEADER ═══ */
+.header{
+  background:var(--bg2); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:12px;
+  padding:0 16px; height:56px; flex-shrink:0; z-index:50;
+  padding-top: env(safe-area-inset-top, 0);
+}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;display:flex;align-items:center;gap:7px;white-space:nowrap}
+.logo span{color:var(--accent)}
+.logo-dot{width:7px;height:7px;background:var(--accent);border-radius:50%;box-shadow:0 0 7px var(--accent);animation:blink 1.5s ease-in-out infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+
+.h-search{flex:1;position:relative;max-width:340px}
+.h-search input{
+  width:100%;background:var(--bg3);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);font-family:'Manrope',sans-serif;
+  font-size:14px;padding:8px 12px 8px 34px;outline:none;
+  transition:border-color .2s;
+}
+.h-search input:focus{border-color:var(--accent)}
+.h-search input::placeholder{color:var(--text3)}
+.h-search .ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none}
+
+.h-right{display:flex;align-items:center;gap:8px;margin-left:auto}
+.icon-btn{
+  width:38px;height:38px;border-radius:9px;
+  background:var(--bg3);border:1px solid var(--border);
+  color:var(--text2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s; flex-shrink:0;
+}
+.icon-btn:hover,.icon-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ═══ MAIN AREA ═══ */
+.main{display:flex;flex:1;overflow:hidden;position:relative}
+
+/* ═══ SIDEBAR (desktop) ═══ */
+.sidebar{
+  width:280px;background:var(--bg2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;
+  transition:transform .3s ease;
+}
+.sb-head{padding:12px 14px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.sb-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3)}
+.sb-count{font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 8px;border-radius:20px}
+
+.type-pills{display:flex;gap:5px;padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+.type-pills::-webkit-scrollbar{display:none}
+.pill{padding:4px 11px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:none;color:var(--text2);white-space:nowrap;transition:all .2s}
+.pill:hover{background:var(--bg4);color:var(--text)}
+.pill.on{border-color:var(--accent);color:var(--accent);background:rgba(232,48,58,.08)}
+
+.ch-list{flex:1;overflow-y:auto;padding:6px;scrollbar-width:thin;scrollbar-color:var(--bg4) transparent}
+.ch-list::-webkit-scrollbar{width:3px}
+.ch-list::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px}
+
+.ch-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;cursor:pointer;transition:all .15s;border:1px solid transparent;margin-bottom:2px;-webkit-tap-highlight-color:transparent}
+.ch-item:hover{background:var(--bg3)}
+.ch-item.on{background:var(--bg4);border-color:var(--accent)}
+.ch-logo{width:42px;height:28px;border-radius:6px;background:var(--bg4);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:8px;font-weight:700;color:var(--text3);text-align:center}
+.ch-logo img{width:100%;height:100%;object-fit:contain;padding:3px}
+.ch-info{flex:1;min-width:0}
+.ch-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-meta{font-size:11px;color:var(--text3);margin-top:1px}
+.live-pip{width:6px;height:6px;background:#3dd68c;border-radius:50%;flex-shrink:0;box-shadow:0 0 5px #3dd68c;animation:blink 2s infinite}
+.off-pip{width:6px;height:6px;background:var(--text3);border-radius:50%;flex-shrink:0}
+
+/* ═══ CONTENT ═══ */
+.content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* ═══ GRID ═══ */
+.grid-wrap{flex:1;overflow-y:auto;padding:16px;scrollbar-width:thin;scrollbar-color:var(--bg4) transparent}
+.grid-wrap::-webkit-scrollbar{width:5px}
+.grid-wrap::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px}
+.sec-lbl{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.sec-lbl::after{content:'';flex:1;height:1px;background:var(--border)}
+.ch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:24px}
+
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:all .2s;position:relative;-webkit-tap-highlight-color:transparent}
+.card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.card:active{transform:scale(.97)}
+.card-thumb{height:82px;background:var(--bg4);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.card-thumb img{max-width:70%;max-height:62%;object-fit:contain;filter:drop-shadow(0 2px 5px rgba(0,0,0,.5))}
+.card-fb{color:var(--text3);font-size:10px;font-weight:700;text-align:center;padding:4px;line-height:1.3}
+.play-ov{position:absolute;inset:0;background:rgba(232,48,58,0);display:flex;align-items:center;justify-content:center;transition:background .2s}
+.card:hover .play-ov{background:rgba(232,48,58,.18)}
+.play-ic{width:34px;height:34px;border-radius:50%;background:rgba(232,48,58,.9);display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(.6);transition:all .2s}
+.card:hover .play-ic,.card:active .play-ic{opacity:1;transform:scale(1)}
+.badge{position:absolute;top:6px;right:6px;background:var(--accent);color:#fff;font-size:8px;font-weight:700;padding:2px 5px;border-radius:3px;letter-spacing:.5px}
+.badge.off{background:rgba(255,255,255,.08);color:var(--text3)}
+.rbadge{position:absolute;top:6px;left:6px;background:rgba(61,214,140,.12);color:#3dd68c;font-size:8px;font-weight:700;padding:2px 5px;border-radius:3px;border:1px solid rgba(61,214,140,.3)}
+.card-body{padding:8px 10px}
+.card-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-sub{font-size:10px;color:var(--text3);margin-top:2px}
+
+/* ═══ PLAYER ═══ */
+.player-view{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.embed-wrap{width:100%;position:relative;background:#000;flex-shrink:0}
+.embed-wrap::after{content:'';display:block;padding-bottom:56.25%}
+.embed-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
+
+.src-bar{
+  display:flex;align-items:center;gap:6px;padding:7px 14px;
+  background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;
+  overflow-x:auto;scrollbar-width:none;
+}
+.src-bar::-webkit-scrollbar{display:none}
+.src-lbl{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);white-space:nowrap;flex-shrink:0}
+.src-btn{
+  padding:5px 13px;border-radius:6px;font-size:12px;font-weight:700;
+  cursor:pointer;border:1px solid var(--border);background:var(--bg3);
+  color:var(--text2);transition:all .2s;white-space:nowrap;flex-shrink:0;
+  display:flex;align-items:center;gap:5px;-webkit-tap-highlight-color:transparent;
+}
+.src-btn:hover{background:var(--bg4);color:var(--text)}
+.src-btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+.pib{padding:10px 16px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;min-width:0}
+.pib-logo{width:42px;height:28px;border-radius:6px;background:var(--bg4);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:8px;font-weight:700;color:var(--text3)}
+.pib-logo img{width:100%;height:100%;object-fit:contain;padding:3px}
+.pib-name{font-size:15px;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pib-owner{font-size:11px;color:var(--text3);flex-shrink:0}
+.pib-live{background:var(--accent);color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:4px;display:flex;align-items:center;gap:4px;flex-shrink:0}
+.pib-live::before{content:'';width:5px;height:5px;background:#fff;border-radius:50%;animation:blink 1s infinite}
+.pib-off{background:var(--bg4);color:var(--text3);font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;flex-shrink:0}
+
+.p-related{flex:1;overflow-y:auto;padding:12px 14px;background:var(--bg2)}
+
+/* ═══ MOBILE BOTTOM NAV ═══ */
+.bottom-nav{
+  display:none;
+  background:var(--bg2);border-top:1px solid var(--border);
+  flex-shrink:0;z-index:60;
+  padding-bottom: var(--safe-bottom);
+}
+.bn-inner{display:flex;height:56px}
+.bn-tab{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;cursor:pointer;
+  color:var(--text3);font-size:10px;font-weight:600;
+  transition:all .2s;-webkit-tap-highlight-color:transparent;
+  border:none;background:none;
+}
+.bn-tab svg{transition:all .2s}
+.bn-tab.on{color:var(--accent)}
+.bn-tab.on svg{filter:drop-shadow(0 0 4px var(--accent))}
+
+/* ═══ MOBILE DRAWER ═══ */
+.drawer-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.6);z-index:70;
+  opacity:0;transition:opacity .3s;
+}
+.drawer-overlay.open{display:block;opacity:1}
+.drawer{
+  position:fixed;left:0;top:0;bottom:0;
+  width:min(320px, 85vw);
+  background:var(--bg2);z-index:80;
+  display:flex;flex-direction:column;
+  transform:translateX(-100%);transition:transform .3s ease;
+  padding-top: env(safe-area-inset-top, 0);
+  padding-bottom: var(--safe-bottom);
+}
+.drawer.open{transform:translateX(0)}
+.drawer-head{
+  padding:14px 16px 10px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0
+}
+.drawer-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;display:flex;align-items:center;gap:7px}
+.drawer-title span{color:var(--accent)}
+.drawer-close{width:32px;height:32px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
+
+.drawer-search{padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.drawer-search input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;padding:9px 12px;outline:none;transition:border-color .2s}
+.drawer-search input:focus{border-color:var(--accent)}
+.drawer-search input::placeholder{color:var(--text3)}
+
+.drawer-pills{display:flex;gap:5px;padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+.drawer-pills::-webkit-scrollbar{display:none}
+
+.drawer-list{flex:1;overflow-y:auto;padding:6px;-webkit-overflow-scrolling:touch}
+
+/* ═══ STATES ═══ */
+.state-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--text3)}
+.loader{width:36px;height:36px;border:3px solid var(--bg4);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.no-ch{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text3)}
+.no-ch-icon{width:70px;height:70px;border:2px dashed var(--border);border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:4px}
+.no-ch h3{color:var(--text2);font-size:15px}
+.no-ch p{font-size:13px}
+
+/* ═══ RESPONSIVE ═══ */
+@media(max-width:768px){
+  .sidebar{display:none}
+  .bottom-nav{display:block}
+  .h-search{display:none}
+  .ch-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+  .card-thumb{height:72px}
+  .grid-wrap{padding:12px}
+}
+@media(min-width:769px){
+  .drawer,.drawer-overlay{display:none!important}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo"><div class="logo-dot"></div>Stream<span>TV</span></div>
+  <div class="h-search">
+    <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" id="desktopSearch" placeholder="Поиск каналов...">
+  </div>
+  <div class="h-right">
+    <!-- кнопка сетка/плеер только на десктопе -->
+    <button class="icon-btn on" id="btnGrid" onclick="switchView('grid')" title="Сетка" style="display:none">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    </button>
+    <button class="icon-btn" id="btnPlayer" onclick="switchView('player')" title="Плеер" style="display:none">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    </button>
+    <!-- кнопка бургер только на мобиле -->
+    <button class="icon-btn" id="btnBurger" onclick="openDrawer()" style="display:none">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- DESKTOP SIDEBAR -->
+  <div class="sidebar">
+    <div class="sb-head">
+      <span class="sb-label">Каналы</span>
+      <span class="sb-count" id="sbCount">—</span>
+    </div>
+    <div class="type-pills" id="desktopPills">
+      <button class="pill on" onclick="setType(this,'all')">Все</button>
+      <button class="pill"    onclick="setType(this,'tv')">📺 ТВ</button>
+      <button class="pill"    onclick="setType(this,'radio')">📻 Радио</button>
+    </div>
+    <div class="ch-list" id="sidebarList"></div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content" id="content"></div>
+</div>
+
+<!-- MOBILE BOTTOM NAV -->
+<nav class="bottom-nav">
+  <div class="bn-inner">
+    <button class="bn-tab on" id="bnHome" onclick="mobileTab('grid')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Каналы
+    </button>
+    <button class="bn-tab" id="bnPlayer" onclick="mobileTab('player')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Плеер
+    </button>
+    <button class="bn-tab" id="bnSearch" onclick="mobileTab('search')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      Поиск
+    </button>
+    <button class="bn-tab" id="bnList" onclick="openDrawer()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      Список
+    </button>
+  </div>
+</nav>
+
+<!-- MOBILE DRAWER -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div class="drawer-title"><div class="logo-dot"></div>Stream<span>TV</span></div>
+    <button class="drawer-close" onclick="closeDrawer()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-search">
+    <input type="text" id="mobileSearch" placeholder="Поиск каналов...">
+  </div>
+  <div class="drawer-pills">
+    <button class="pill on" onclick="setType(this,'all')">Все</button>
+    <button class="pill"    onclick="setType(this,'tv')">📺 ТВ</button>
+    <button class="pill"    onclick="setType(this,'radio')">📻 Радио</button>
+  </div>
+  <div class="drawer-list ch-list" id="drawerList"></div>
+</div>
+
+<!-- MOBILE SEARCH OVERLAY -->
+<div id="mobileSearchWrap" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:55;padding:16px;padding-top:calc(16px + env(safe-area-inset-top))">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+    <div style="position:relative;flex:1">
+      <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3)" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="mobileSearchInline" type="text" placeholder="Поиск каналов..."
+        style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:9px;color:var(--text);font-family:'Manrope',sans-serif;font-size:15px;padding:10px 12px 10px 36px;outline:none">
+    </div>
+    <button onclick="closeMobileSearch()" style="padding:8px 14px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">Отмена</button>
+  </div>
+  <div class="ch-grid" id="mobileSearchResults" style="overflow-y:auto;max-height:calc(100vh - 100px)"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════
+const API_URL = 'https://aqeleulwobgamdffkfri.supabase.co/functions/v1/public-channels';
+const ALLOWED = ['oinktech', 'twixoff', 'ТВ КАНАЛЫ'];
+const SOURCES = [
+  { id:'embess',  label:'Embess Studio', url: id => `https://embesslivestudio.lovable.app/player?channel=${id}` },
+  { id:'native',  label:'StreamLiveTV',  url: id => `https://bbacesemc33e7hd47kfq.containers.yandexcloud.net/embed/${id}` },
+];
+
+// ══════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════
+let allCh = [], view = [];
+let currentCh = null, curView = 'grid';
+let typeF = 'all', searchQ = '';
+let curSrc = 0;
+const seenIds = new Set();
+const isMobile = () => window.innerWidth <= 768;
+
+// ══════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════
+window.onload = () => {
+  setupResponsive();
+  showLoading();
+  loadAllChannels();
+
+  // Desktop search
+  document.getElementById('desktopSearch').addEventListener('input', e => {
+    searchQ = e.target.value.toLowerCase().trim();
+    applyFilters();
+  });
+  // Mobile drawer search
+  document.getElementById('mobileSearch').addEventListener('input', e => {
+    searchQ = e.target.value.toLowerCase().trim();
+    applyFilters();
+  });
+  // Mobile inline search
+  document.getElementById('mobileSearchInline').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase().trim();
+    renderSearchResults(q);
+  });
+
+  window.addEventListener('resize', setupResponsive);
+};
+
+function setupResponsive() {
+  const mobile = isMobile();
+  // Показываем нужные кнопки в хедере
+  document.getElementById('btnGrid').style.display   = mobile ? 'none' : 'flex';
+  document.getElementById('btnPlayer').style.display = mobile ? 'none' : 'flex';
+  document.getElementById('btnBurger').style.display = mobile ? 'flex' : 'none';
+}
+
+// ══════════════════════════════════════════════
+//  API — грузим все страницы
+// ══════════════════════════════════════════════
+async function loadAllChannels() {
+  try {
+    const r    = await fetch(API_URL, { method:'GET', headers:{'Accept':'application/json'} });
+    const json = await r.json();
+    processChannels(extractList(json));
+
+    const tp = json.pagination?.total_pages || 1;
+    // Грузим остальные страницы параллельно пачками по 3
+    const pages = Array.from({length: tp - 1}, (_, i) => i + 2);
+    for (let i = 0; i < pages.length; i += 3) {
+      const batch = pages.slice(i, i + 3);
+      await Promise.all(batch.map(p =>
+        fetch(`${API_URL}?page=${p}&limit=50`, { method:'GET', headers:{'Accept':'application/json'} })
+          .then(r => r.json())
+          .then(json => processChannels(extractList(json)))
+          .catch(() => {})
+      ));
+      await new Promise(r => setTimeout(r, 200));
+    }
+  } catch(e) {
+    console.error('API error:', e);
+    if (allCh.length === 0) showError('Не удалось загрузить каналы: ' + e.message);
+  }
+}
+
+function extractList(json) {
+  if (Array.isArray(json)) return json;
+  for (const k of ['data','channels','items','results','list','streams']) {
+    if (Array.isArray(json[k])) return json[k];
+  }
+  return [];
+}
+
+function processChannels(list) {
+  const fresh = list
+    .filter(ch => {
+      const u = (ch.owner?.username || ch.owner || '').toLowerCase();
+      return ALLOWED.some(a => u.includes(a));
+    })
+    .filter(ch => {
+      if (seenIds.has(ch.id)) return false;
+      seenIds.add(ch.id);
+      return true;
+    })
+    .map(ch => ({
+      id:    ch.id,
+      name:  (ch.title || ch.name || '').trim() || 'Без названия',
+      thumb: ch.thumbnail_url || ch.logo || '',
+      type:  ch.channel_type || ch.type || 'tv',
+      live:  !!(ch.is_live || ch.live),
+      owner: (typeof ch.owner === 'object' ? ch.owner?.username : ch.owner) || '',
+    }));
+
+  if (!fresh.length) return;
+  allCh.push(...fresh);
+  if (!currentCh) currentCh = allCh[0];
+  applyFilters();
+}
+
+// ══════════════════════════════════════════════
+//  FILTERS
+// ══════════════════════════════════════════════
+function applyFilters() {
+  view = allCh.filter(ch => {
+    if (typeF !== 'all' && ch.type !== typeF) return false;
+    if (searchQ && !ch.name.toLowerCase().includes(searchQ)) return false;
+    return true;
+  });
+  document.getElementById('sbCount').textContent = view.length;
+  renderSidebarList();
+  if (curView === 'grid') renderGrid();
+}
+
+function setType(btn, t) {
+  typeF = t;
+  document.querySelectorAll('.pill').forEach(b => b.classList.remove('on'));
+  // активируем все кнопки с этим же типом (сайдбар + дравер)
+  document.querySelectorAll('.pill').forEach(b => {
+    const onclick = b.getAttribute('onclick') || '';
+    if (onclick.includes(`'${t}'`)) b.classList.add('on');
+  });
+  applyFilters();
+}
+
+// ══════════════════════════════════════════════
+//  SIDEBAR LIST (desktop + drawer)
+// ══════════════════════════════════════════════
+function renderSidebarList() {
+  ['sidebarList','drawerList'].forEach(listId => {
+    const el = document.getElementById(listId);
+    if (!el) return;
+    el.innerHTML = '';
+    view.forEach(ch => {
+      const d = document.createElement('div');
+      d.className = 'ch-item' + (currentCh?.id === ch.id ? ' on' : '');
+      d.dataset.id = ch.id;
+      d.innerHTML = `
+        <div class="ch-logo">${ch.thumb
+          ? `<img src="${esc(ch.thumb)}" onerror="this.style.display='none'">`
+          : esc(ch.name.slice(0,4))}</div>
+        <div class="ch-info">
+          <div class="ch-name">${esc(ch.name)}</div>
+          <div class="ch-meta">${ch.type==='radio'?'📻':'📺'} · ${esc(ch.owner)}</div>
+        </div>
+        <div class="${ch.live?'live-pip':'off-pip'}"></div>`;
+      d.onclick = () => {
+        play(ch);
+        if (isMobile()) { closeDrawer(); mobileTab('player'); }
+        else switchView('player');
+      };
+      el.appendChild(d);
+    });
+  });
+}
+
+// ══════════════════════════════════════════════
+//  GRID
+// ══════════════════════════════════════════════
+function renderGrid() {
+  const c = document.getElementById('content');
+  if (curView !== 'grid') return;
+  c.innerHTML = '';
+  const w = document.createElement('div');
+  w.className = 'grid-wrap';
+
+  if (!allCh.length) {
+    w.innerHTML = '<div class="state-screen"><div class="loader"></div><span>Загрузка каналов с API...</span></div>';
+    c.appendChild(w); return;
+  }
+  if (!view.length) {
+    w.innerHTML = '<div class="state-screen"><span>Ничего не найдено</span></div>';
+    c.appendChild(w); return;
+  }
+
+  const live  = view.filter(ch => ch.live);
+  const tv    = view.filter(ch => !ch.live && ch.type === 'tv');
+  const radio = view.filter(ch => !ch.live && ch.type === 'radio');
+
+  [['🔴 В эфире', live], ['📺 Телеканалы', tv], ['📻 Радиостанции', radio]]
+    .filter(([, items]) => items.length)
+    .forEach(([label, items]) => {
+      const lbl = document.createElement('div');
+      lbl.className = 'sec-lbl'; lbl.textContent = label;
+      w.appendChild(lbl);
+      const g = document.createElement('div');
+      g.className = 'ch-grid';
+      items.forEach(ch => g.appendChild(makeCard(ch)));
+      w.appendChild(g);
+    });
+
+  c.appendChild(w);
+}
+
+function makeCard(ch) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="card-thumb">
+      ${ch.thumb ? `<img src="${esc(ch.thumb)}" onerror="this.remove()">` : `<div class="card-fb">${esc(ch.name.slice(0,7))}</div>`}
+      <div class="play-ov"><div class="play-ic">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </div></div>
+      <div class="badge ${ch.live?'':'off'}">${ch.live?'LIVE':'OFF'}</div>
+      ${ch.type==='radio'?'<div class="rbadge">RADIO</div>':''}
+    </div>
+    <div class="card-body">
+      <div class="card-name">${esc(ch.name)}</div>
+      <div class="card-sub">${esc(ch.owner)}</div>
+    </div>`;
+  card.onclick = () => {
+    play(ch);
+    if (isMobile()) mobileTab('player');
+    else switchView('player');
+  };
+  return card;
+}
+
+// ══════════════════════════════════════════════
+//  PLAYER
+// ══════════════════════════════════════════════
+function play(ch) {
+  currentCh = ch;
+  document.querySelectorAll('.ch-item').forEach(el =>
+    el.classList.toggle('on', el.dataset.id === ch.id));
+  if (curView === 'player') renderPlayer(ch);
+}
+
+function renderPlayer(ch) {
+  const c = document.getElementById('content');
+  const embedUrl = SOURCES[curSrc].url(ch.id);
+
+  c.innerHTML = `
+    <div class="player-view">
+      <div class="embed-wrap">
+        <iframe id="embedFrame"
+          src="${esc(embedUrl)}"
+          allowfullscreen
+          allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+          referrerpolicy="no-referrer-when-downgrade"
+        ></iframe>
+      </div>
+
+      <div class="src-bar">
+        <span class="src-lbl">Источник:</span>
+        ${SOURCES.map((s, i) => `
+          <button class="src-btn ${i===curSrc?'on':''}" onclick="switchSrc(${i})">
+            ${i===0?'▶ ':'📡 '}${esc(s.label)}
+          </button>`).join('')}
+      </div>
+
+      <div class="pib">
+        <div class="pib-logo">${ch.thumb
+          ? `<img src="${esc(ch.thumb)}" onerror="this.style.display='none'">`
+          : esc(ch.name.slice(0,3))}</div>
+        <div class="pib-name">${esc(ch.name)}</div>
+        <div class="pib-owner">@${esc(ch.owner)}</div>
+        <div class="${ch.live?'pib-live':'pib-off'}">${ch.live?'LIVE':'OFF'}</div>
+      </div>
+
+      <div class="p-related">
+        <div class="sec-lbl">Другие каналы</div>
+        <div class="ch-grid" id="relGrid"></div>
+      </div>
+    </div>`;
+
+  renderRelated(ch);
+}
+
+function switchSrc(idx) {
+  curSrc = idx;
+  const frame = document.getElementById('embedFrame');
+  if (frame && currentCh) frame.src = SOURCES[idx].url(currentCh.id);
+  document.querySelectorAll('.src-btn').forEach((b, i) => b.classList.toggle('on', i === idx));
+}
+
+function renderRelated(current) {
+  const el = document.getElementById('relGrid');
+  if (!el) return;
+  view.filter(c => c.id !== current.id).slice(0, 12).forEach(ch => el.appendChild(makeCard(ch)));
+}
+
+// ══════════════════════════════════════════════
+//  VIEW SWITCHING
+// ══════════════════════════════════════════════
+function switchView(v) {
+  curView = v;
+  document.getElementById('btnGrid')?.classList.toggle('on', v==='grid');
+  document.getElementById('btnPlayer')?.classList.toggle('on', v==='player');
+  if (v === 'grid') renderGrid();
+  else if (currentCh) renderPlayer(currentCh);
+  else showNoCh();
+}
+
+// ══════════════════════════════════════════════
+//  MOBILE TABS
+// ══════════════════════════════════════════════
+function mobileTab(tab) {
+  document.querySelectorAll('.bn-tab').forEach(b => b.classList.remove('on'));
+
+  if (tab === 'grid') {
+    document.getElementById('bnHome').classList.add('on');
+    curView = 'grid';
+    renderGrid();
+  } else if (tab === 'player') {
+    document.getElementById('bnPlayer').classList.add('on');
+    curView = 'player';
+    if (currentCh) renderPlayer(currentCh);
+    else showNoCh();
+  } else if (tab === 'search') {
+    document.getElementById('bnSearch').classList.add('on');
+    openMobileSearch();
+    return;
+  }
+}
+
+// ══════════════════════════════════════════════
+//  MOBILE DRAWER
+// ══════════════════════════════════════════════
+function openDrawer() {
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ══════════════════════════════════════════════
+//  MOBILE SEARCH
+// ══════════════════════════════════════════════
+function openMobileSearch() {
+  document.getElementById('mobileSearchWrap').style.display = 'block';
+  setTimeout(() => document.getElementById('mobileSearchInline').focus(), 100);
+  renderSearchResults('');
+}
+function closeMobileSearch() {
+  document.getElementById('mobileSearchWrap').style.display = 'none';
+  document.getElementById('mobileSearchInline').value = '';
+  document.getElementById('bnHome').classList.add('on');
+  document.querySelectorAll('.bn-tab').forEach(b => b.classList.remove('on'));
+  document.getElementById('bnHome').classList.add('on');
+}
+function renderSearchResults(q) {
+  const el = document.getElementById('mobileSearchResults');
+  el.innerHTML = '';
+  const results = q
+    ? allCh.filter(ch => ch.name.toLowerCase().includes(q))
+    : allCh.slice(0, 40);
+  results.forEach(ch => el.appendChild(makeCard(ch)));
+}
+
+// ══════════════════════════════════════════════
+//  STATES
+// ══════════════════════════════════════════════
+function showLoading() {
+  document.getElementById('content').innerHTML =
+    '<div class="state-screen"><div class="loader"></div><span>Загрузка каналов...</span></div>';
+}
+function showError(msg) {
+  document.getElementById('content').innerHTML = `
+    <div class="state-screen">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px 24px;max-width:420px;text-align:center">
+        <div style="font-size:15px;font-weight:700;margin-bottom:8px">Ошибка загрузки</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.6">${esc(msg)}</div>
+      </div>
+    </div>`;
+}
+function showNoCh() {
+  document.getElementById('content').innerHTML = `
+    <div class="no-ch">
+      <div class="no-ch-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/>
+        </svg>
+      </div>
+      <h3>Выберите канал</h3>
+      <p>Нажмите на канал в сетке или списке</p>
+    </div>`;
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
+ 
