@@ -97,7 +97,7 @@ const Admin = () => {
       return;
     }
 
-    await supabase
+    const { error: hideError } = await supabase
       .from("channels")
       .update({
         is_hidden: true,
@@ -106,7 +106,12 @@ const Admin = () => {
       })
       .eq("id", row.channel_id);
 
-    await supabase
+    if (hideError) {
+      toast({ title: "Ошибка скрытия канала", description: hideError.message, variant: "destructive" });
+      return;
+    }
+
+    let { error: reportError } = await supabase
       .from("reports")
       .update({
         status: "approved",
@@ -118,15 +123,82 @@ const Admin = () => {
       })
       .eq("id", row.id);
 
+    if (reportError) {
+      const fallback = await supabase
+        .from("reports")
+        .update({
+          status: "resolved",
+          is_verified: true,
+          verified_at: new Date().toISOString(),
+          admin_note: adminReason,
+          moderated_by: user?.id,
+          moderated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id);
+      reportError = fallback.error;
+    }
+
+    if (reportError) {
+      toast({ title: "Канал скрыт, но жалоба не обновлена", description: reportError.message, variant: "destructive" });
+      return;
+    }
+
     toast({ title: "Канал скрыт", description: `Канал скрыт по жалобе #${row.id}` });
     void loadReports();
   };
 
+  const rejectReport = async (row: ReportRow) => {
+    const adminReason = reasonByReport[row.id]?.trim();
+    if (!adminReason) {
+      toast({ title: "Укажите причину отклонения", variant: "destructive" });
+      return;
+    }
+
+    let { error } = await supabase
+      .from("reports")
+      .update({
+        status: "rejected",
+        is_verified: false,
+        admin_note: adminReason,
+        moderated_by: user?.id,
+        moderated_at: new Date().toISOString(),
+      })
+      .eq("id", row.id);
+
+    if (error) {
+      const fallback = await supabase
+        .from("reports")
+        .update({
+          status: "dismissed",
+          is_verified: false,
+          admin_note: adminReason,
+          moderated_by: user?.id,
+          moderated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id);
+      error = fallback.error;
+    }
+
+    if (error) {
+      toast({ title: "Ошибка отклонения жалобы", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Жалоба отклонена", description: `Жалоба #${row.id} отклонена` });
+    void loadReports();
+  };
+
   const unhideChannel = async (channelId: string) => {
-    await supabase
+    const { error } = await supabase
       .from("channels")
       .update({ is_hidden: false, hidden_at: null, hidden_reason: null })
       .eq("id", channelId);
+
+    if (error) {
+      toast({ title: "Ошибка восстановления", description: error.message, variant: "destructive" });
+      return;
+    }
+
     toast({ title: "Канал восстановлен" });
     void loadReports();
   };
@@ -204,7 +276,13 @@ const Admin = () => {
             {reports.map((r) => (
               <div key={r.id} className="border rounded-lg p-3 space-y-2">
                 <div className="text-sm">Жалоба <b>#{r.id}</b> · {r.reason} · статус: {r.status ?? "pending"}</div>
-                <div className="text-sm text-muted-foreground">Канал: {r.channels?.title ?? r.channel_id}</div>
+                <div className="text-sm text-muted-foreground">
+                  Канал: {r.channels?.title ?? r.channel_id}
+                  {" "}
+                  <a className="underline" href={`/channel/${r.channel_id}`} target="_blank" rel="noreferrer">открыть</a>
+                  {" · "}
+                  <a className="underline" href={`/popout/${r.channel_id}`} target="_blank" rel="noreferrer">попап</a>
+                </div>
                 {r.description && <div className="text-sm">Комментарий: {r.description}</div>}
                 <Input
                   placeholder="Причина от администратора"
@@ -213,6 +291,7 @@ const Admin = () => {
                 />
                 <div className="flex gap-2">
                   <Button onClick={() => hideByReport(r)}>Скрыть канал по жалобе</Button>
+                  <Button variant="secondary" onClick={() => rejectReport(r)}>Отклонить жалобу</Button>
                   {r.channels?.is_hidden && (
                     <Button variant="outline" onClick={() => unhideChannel(r.channel_id)}>Показать канал</Button>
                   )}
