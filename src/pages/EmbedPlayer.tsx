@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -6,6 +6,7 @@ import { Lock, AlertTriangle } from "lucide-react";
 import UniversalPlayer, { SourceType } from "@/components/UniversalPlayer";
 import { getDiscoveryCensorshipReason, shouldCensorChannelFromDiscovery } from "@/lib/channelSafety";
 import { resolveLiveStreamUrl } from "@/lib/liveStream";
+import { getActivePlaybackQueue, getPreferredPlayableMedia } from "@/lib/mediaSchedule";
 
 interface Channel {
   id: string;
@@ -32,6 +33,8 @@ interface MediaContent {
   file_url: string;
   is_24_7: boolean;
   source_type: string | null;
+  start_time: string | null;
+  end_time: string | null;
 }
 
 const EmbedPlayer = () => {
@@ -42,14 +45,39 @@ const EmbedPlayer = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(true);
+  const [scheduleTick, setScheduleTick] = useState(() => Date.now());
 
   useEffect(() => { fetchChannelAndMedia(); }, [id]);
+  useEffect(() => {
+    const interval = window.setInterval(() => setScheduleTick(Date.now()), 60000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (channel?.paid_only) {
       checkAccess();
     }
   }, [channel, user]);
+
+  const playableMedia = useMemo(() => getActivePlaybackQueue(mediaContent), [mediaContent, scheduleTick]);
+  const preferredMedia = useMemo(() => getPreferredPlayableMedia(mediaContent), [mediaContent, scheduleTick]);
+
+  useEffect(() => {
+    if (playableMedia.length === 0) {
+      setCurrentIndex(0);
+      return;
+    }
+
+    if (preferredMedia) {
+      const preferredIndex = playableMedia.findIndex((media) => media.id === preferredMedia.id);
+      if (preferredIndex !== -1) {
+        setCurrentIndex(preferredIndex);
+        return;
+      }
+    }
+
+    setCurrentIndex((prev) => Math.min(prev, playableMedia.length - 1));
+  }, [playableMedia, preferredMedia]);
 
   const checkAccess = async () => {
     if (!channel?.paid_only) { setHasAccess(true); return; }
@@ -78,12 +106,11 @@ const EmbedPlayer = () => {
 
       const { data: mediaData, error: mediaError } = await supabase
         .from("media_content")
-        .select("id, title, file_url, is_24_7, source_type")
+        .select("id, title, file_url, is_24_7, source_type, start_time, end_time")
         .eq("channel_id", id)
         .order("created_at", { ascending: true });
       if (!mediaError && mediaData) {
-        const activeContent = mediaData.filter((m) => m.is_24_7);
-        setMediaContent(activeContent.length > 0 ? activeContent : mediaData);
+        setMediaContent(mediaData);
       }
     } catch (error) { console.error("Error fetching data:", error); }
     finally { setLoading(false); }
@@ -176,12 +203,13 @@ const EmbedPlayer = () => {
     );
   }
 
-  if (mediaContent.length === 0) {
+  if (playableMedia.length === 0) {
     return <div className="w-full h-full flex items-center justify-center bg-background"><p className="text-foreground">Нет доступного контента</p></div>;
   }
 
-  const currentMedia = mediaContent[currentIndex];
-  const handleEnded = () => setCurrentIndex((prev) => (prev + 1) % mediaContent.length);
+  const safeIndex = Math.min(currentIndex, Math.max(0, playableMedia.length - 1));
+  const currentMedia = playableMedia[safeIndex];
+  const handleEnded = () => setCurrentIndex((prev) => (prev + 1) % playableMedia.length);
 
   return (
     <div className="w-full h-full bg-background relative">

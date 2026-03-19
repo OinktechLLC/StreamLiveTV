@@ -17,6 +17,7 @@ import DataConsentBanner from "@/components/DataConsentBanner";
 import { useShortsRecommendations } from "@/hooks/useShortsRecommendations";
 import { resolveLiveStreamUrl } from "@/lib/liveStream";
 import { deduplicateChannelsByTitle, shouldCensorChannelFromDiscovery } from "@/lib/channelSafety";
+import { getActivePlaybackQueue, getCurrentlyPlayableMedia, getPreferredPlayableMedia } from "@/lib/mediaSchedule";
 
 interface Channel {
   id: string;
@@ -46,6 +47,8 @@ interface MediaContent {
   source_type: string | null;
   title: string;
   is_24_7?: boolean;
+  start_time: string | null;
+  end_time: string | null;
 }
 
 interface ChatMessage {
@@ -83,6 +86,7 @@ const Shorts = () => {
   const [playerKey, setPlayerKey] = useState(0);
   const [interestInput, setInterestInput] = useState("");
   const [showInterestEditor, setShowInterestEditor] = useState(false);
+  const [scheduleTick, setScheduleTick] = useState(() => Date.now());
 
   const tokenizeContent = (value: string) =>
     value
@@ -108,6 +112,11 @@ const Shorts = () => {
     setInterestInput(interestTags.join(", "));
   }, [interestTags]);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => setScheduleTick(Date.now()), 60000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   const fetchChannels = useCallback(async () => {
     setLoading(true);
     
@@ -128,34 +137,14 @@ const Shorts = () => {
         const batch = channelIds.slice(i, i + 30);
         const { data: mediaData } = await supabase
           .from("media_content")
-          .select("id, file_url, source_type, title, channel_id, is_24_7")
+          .select("id, file_url, source_type, title, channel_id, is_24_7, start_time, end_time")
           .in("channel_id", batch)
-          .eq("is_24_7", true)
           .order("created_at", { ascending: true });
         if (mediaData) {
           mediaData.forEach((m: any) => {
             if (!mediaMap[m.channel_id]) mediaMap[m.channel_id] = [];
             mediaMap[m.channel_id].push(m);
           });
-        }
-      }
-      
-      // Fallback: if no is_24_7 media, get all media for channels that had none
-      const channelsWithoutMedia = channelIds.filter(id => !mediaMap[id] || mediaMap[id].length === 0);
-      if (channelsWithoutMedia.length > 0) {
-        for (let i = 0; i < channelsWithoutMedia.length; i += 30) {
-          const batch = channelsWithoutMedia.slice(i, i + 30);
-          const { data: mediaData } = await supabase
-            .from("media_content")
-            .select("id, file_url, source_type, title, channel_id, is_24_7")
-            .in("channel_id", batch)
-            .order("created_at", { ascending: true });
-          if (mediaData) {
-            mediaData.forEach((m: any) => {
-              if (!mediaMap[m.channel_id]) mediaMap[m.channel_id] = [];
-              mediaMap[m.channel_id].push(m);
-            });
-          }
         }
       }
     }
@@ -180,7 +169,7 @@ const Shorts = () => {
         isHidden: ch.is_hidden,
         hiddenReason: ch.hidden_reason,
       }))
-      .filter((ch) => ch.is_live || (mediaMap[ch.id] || []).length > 0);
+      .filter((ch) => ch.is_live || getCurrentlyPlayableMedia(mediaMap[ch.id] || []).length > 0);
     const deduped = deduplicateChannelsByTitle(withMedia as any[]);
 
     const scored = deduped.map((ch: any) => ({ ...ch, _score: scoreChannel(ch) }));
@@ -230,6 +219,38 @@ const Shorts = () => {
     setCurrentMediaIndex(0);
     setPlayerKey(prev => prev + 1);
   }, [currentIndex]);
+
+  useEffect(() => {
+    const currentChannelId = channels[currentIndex]?.id;
+    if (!currentChannelId) return;
+
+    const channelMedia = (mediaByChannel[currentChannelId] || []) as MediaContent[];
+    const playableSources = getActivePlaybackQueue(channelMedia);
+    const preferredSource = getPreferredPlayableMedia(channelMedia);
+
+    if (playableSources.length === 0) {
+      if (currentMediaIndex !== 0) {
+        setCurrentMediaIndex(0);
+        setPlayerKey((prev) => prev + 1);
+      }
+      return;
+    }
+
+    if (preferredSource) {
+      const preferredIndex = playableSources.findIndex((media) => media.id === preferredSource.id);
+      if (preferredIndex !== -1 && preferredIndex !== currentMediaIndex) {
+        setCurrentMediaIndex(preferredIndex);
+        setPlayerKey((prev) => prev + 1);
+        return;
+      }
+    }
+
+    const safeIndex = Math.min(currentMediaIndex, playableSources.length - 1);
+    if (safeIndex !== currentMediaIndex) {
+      setCurrentMediaIndex(safeIndex);
+      setPlayerKey((prev) => prev + 1);
+    }
+  }, [channels, currentIndex, currentMediaIndex, mediaByChannel, scheduleTick]);
 
   // Viewer heartbeat
   useEffect(() => {
@@ -370,7 +391,7 @@ const Shorts = () => {
 
   // Continuous broadcast: cycle through media
   const handleMediaEnded = () => {
-    const sources = mediaByChannel[channels[currentIndex]?.id] || [];
+    const sources = getActivePlaybackQueue<MediaContent>((mediaByChannel[channels[currentIndex]?.id] || []) as MediaContent[]);
     if (sources.length > 1) {
       setCurrentMediaIndex(prev => (prev + 1) % sources.length);
       setPlayerKey(prev => prev + 1);
@@ -403,7 +424,7 @@ const Shorts = () => {
   }
 
   const currentChannel = channels[currentIndex];
-  const sourcesForChannel = mediaByChannel[currentChannel?.id] || [];
+  const sourcesForChannel = getActivePlaybackQueue<MediaContent>((mediaByChannel[currentChannel?.id] || []) as MediaContent[]);
   const safeMediaIndex = Math.min(currentMediaIndex, Math.max(0, sourcesForChannel.length - 1));
   const currentMedia = sourcesForChannel[safeMediaIndex];
   const isLiked = likedChannels.has(currentChannel?.id);

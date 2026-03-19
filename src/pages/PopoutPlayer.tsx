@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -7,6 +7,7 @@ import { Lock, AlertTriangle } from "lucide-react";
 import UniversalPlayer, { SourceType } from "@/components/UniversalPlayer";
 import { getDiscoveryCensorshipReason, shouldCensorChannelFromDiscovery } from "@/lib/channelSafety";
 import { resolveLiveStreamUrl } from "@/lib/liveStream";
+import { getActivePlaybackQueue, getPreferredPlayableMedia } from "@/lib/mediaSchedule";
 
 interface Channel {
   id: string;
@@ -33,6 +34,8 @@ interface MediaContent {
   file_url: string;
   source_type: string | null;
   is_24_7?: boolean;
+  start_time: string | null;
+  end_time: string | null;
 }
 
 const PopoutPlayer = () => {
@@ -43,9 +46,34 @@ const PopoutPlayer = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(true);
+  const [scheduleTick, setScheduleTick] = useState(() => Date.now());
 
   useEffect(() => { fetchData(); }, [id]);
   useEffect(() => { if (channel?.paid_only) checkAccess(); }, [channel, user]);
+  useEffect(() => {
+    const interval = window.setInterval(() => setScheduleTick(Date.now()), 60000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const playableMedia = useMemo(() => getActivePlaybackQueue(mediaContent), [mediaContent, scheduleTick]);
+  const preferredMedia = useMemo(() => getPreferredPlayableMedia(mediaContent), [mediaContent, scheduleTick]);
+
+  useEffect(() => {
+    if (playableMedia.length === 0) {
+      setCurrentIndex(0);
+      return;
+    }
+
+    if (preferredMedia) {
+      const preferredIndex = playableMedia.findIndex((media) => media.id === preferredMedia.id);
+      if (preferredIndex !== -1) {
+        setCurrentIndex(preferredIndex);
+        return;
+      }
+    }
+
+    setCurrentIndex((prev) => Math.min(prev, playableMedia.length - 1));
+  }, [playableMedia, preferredMedia]);
 
   const checkAccess = async () => {
     if (!channel?.paid_only) { setHasAccess(true); return; }
@@ -62,7 +90,7 @@ const PopoutPlayer = () => {
       if (channelData) {
         setChannel(channelData as Channel);
         if (channelData.streaming_method !== "live") {
-          const { data: mediaData } = await supabase.from("media_content").select("id, title, file_url, source_type, is_24_7").eq("channel_id", id).order("created_at", { ascending: false });
+          const { data: mediaData } = await supabase.from("media_content").select("id, title, file_url, source_type, is_24_7, start_time, end_time").eq("channel_id", id).order("created_at", { ascending: false });
           if (mediaData) setMediaContent(mediaData);
         }
       }
@@ -70,7 +98,7 @@ const PopoutPlayer = () => {
     finally { setLoading(false); }
   };
 
-  const handleEnded = () => setCurrentIndex((prev) => (prev + 1) % (mediaContent.length || 1));
+  const handleEnded = () => setCurrentIndex((prev) => (prev + 1) % (playableMedia.length || 1));
 
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="animate-pulse text-foreground">Загрузка...</div></div>;
   if (!channel) return <div className="min-h-screen bg-background flex items-center justify-center"><p className="text-foreground">Канал не найден</p></div>;
@@ -104,7 +132,8 @@ const PopoutPlayer = () => {
     );
   }
 
-  const currentMedia = mediaContent[currentIndex];
+  const safeIndex = Math.min(currentIndex, Math.max(0, playableMedia.length - 1));
+  const currentMedia = playableMedia[safeIndex];
   const liveStreamUrl = resolveLiveStreamUrl({
     channelId: channel.id,
     streamingMethod: channel.streaming_method,

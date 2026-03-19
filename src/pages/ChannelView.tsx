@@ -52,6 +52,7 @@ import { Film, Download, Crown, Dices, Lock, Zap } from "lucide-react";
 import PaidContentGate from "@/components/PaidContentGate";
 import { BLOCKED_CHANNEL_TEXT, getDiscoveryCensorshipReason, shouldCensorChannelFromDiscovery } from "@/lib/channelSafety";
 import { resolveLiveStreamUrl } from "@/lib/liveStream";
+import { getNextPlayableMedia } from "@/lib/mediaSchedule";
 
 interface Channel {
   id: string;
@@ -754,18 +755,9 @@ const ChannelView = () => {
   };
 
   const handleMediaEnded = async () => {
-    // Get active media (is_24_7 enabled)
-    const activeMedia = mediaContent.filter(m => m.is_24_7);
-    if (activeMedia.length === 0) return;
+    const nextMedia = getNextPlayableMedia(mediaContent, mediaContent[currentMediaIndex]?.id);
+    if (!nextMedia) return;
 
-    // Find current index in active media
-    const currentActiveIndex = activeMedia.findIndex(m => m.id === mediaContent[currentMediaIndex]?.id);
-    
-    // Move to next, loop back to start if at end
-    const nextActiveIndex = (currentActiveIndex + 1) % activeMedia.length;
-    const nextMedia = activeMedia[nextActiveIndex];
-    
-    // Find index in full mediaContent array
     const nextFullIndex = mediaContent.findIndex(m => m.id === nextMedia.id);
     if (nextFullIndex !== -1) {
       setCurrentMediaIndex(nextFullIndex);
