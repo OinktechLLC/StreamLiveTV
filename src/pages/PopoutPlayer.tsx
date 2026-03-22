@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,6 +8,7 @@ import UniversalPlayer, { SourceType } from "@/components/UniversalPlayer";
 import { getDiscoveryCensorshipReason, shouldCensorChannelFromDiscovery } from "@/lib/channelSafety";
 import { resolveLiveStreamUrl } from "@/lib/liveStream";
 import { getActivePlaybackQueue, getPreferredPlayableMedia } from "@/lib/mediaSchedule";
+import { useRealtimeChannelSync } from "@/hooks/useRealtimeChannelSync";
 
 interface Channel {
   id: string;
@@ -48,12 +49,112 @@ const PopoutPlayer = () => {
   const [hasAccess, setHasAccess] = useState(true);
   const [scheduleTick, setScheduleTick] = useState(() => Date.now());
 
-  useEffect(() => { fetchData(); }, [id]);
-  useEffect(() => { if (channel?.paid_only) checkAccess(); }, [channel, user]);
+  const checkAccess = useCallback(async (channelOverride?: Channel | null) => {
+    const targetChannel = channelOverride ?? channel;
+
+    if (!targetChannel?.paid_only) {
+      setHasAccess(true);
+      return;
+    }
+
+    if (!user) {
+      setHasAccess(false);
+      return;
+    }
+
+    if (user.id === targetChannel.user_id) {
+      setHasAccess(true);
+      return;
+    }
+
+    const { data } = await supabase
+      .from("user_premium_subscriptions")
+      .select("id")
+      .eq("channel_id", targetChannel.id)
+      .eq("user_id", user.id)
+      .gte("expires_at", new Date().toISOString())
+      .limit(1);
+
+    setHasAccess((data && data.length > 0) || false);
+  }, [channel, user]);
+
+  const fetchMedia = useCallback(async (channelOverride?: Channel | null) => {
+    const targetChannel = channelOverride ?? channel;
+
+    if (!id || !targetChannel || targetChannel.streaming_method === "live") {
+      setMediaContent([]);
+      return;
+    }
+
+    const { data: mediaData, error: mediaError } = await supabase
+      .from("media_content")
+      .select("id, title, file_url, source_type, is_24_7, start_time, end_time")
+      .eq("channel_id", id)
+      .order("created_at", { ascending: false });
+
+    if (mediaError) {
+      console.error("Error fetching media:", mediaError);
+      return;
+    }
+
+    setMediaContent(mediaData || []);
+  }, [channel, id]);
+
+  const fetchChannel = useCallback(async () => {
+    if (!id) return;
+
+    const { data: channelData, error: channelError } = await supabase
+      .from("channels")
+      .select("id, title, channel_type, streaming_method, mux_playback_id, stream_key, thumbnail_url, is_live, user_id, paid_only, is_hidden, hidden_reason, description, profiles:user_id(username)")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (channelError) {
+      console.error("Error fetching channel:", channelError);
+      return;
+    }
+
+    const normalizedChannel = (channelData as Channel | null) ?? null;
+    setChannel(normalizedChannel);
+    await Promise.all([
+      checkAccess(normalizedChannel),
+      fetchMedia(normalizedChannel),
+    ]);
+  }, [checkAccess, fetchMedia, id]);
+
+  const fetchData = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      await fetchChannel();
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchChannel, id]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
+
   useEffect(() => {
     const interval = window.setInterval(() => setScheduleTick(Date.now()), 60000);
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    void checkAccess();
+  }, [checkAccess]);
+
+  useRealtimeChannelSync({
+    channelId: id,
+    viewerId: user?.id,
+    refreshChannel: fetchChannel,
+    refreshMedia: () => fetchMedia(),
+    refreshDeletedChannel: fetchChannel,
+    refreshAccess: () => checkAccess(),
+  });
 
   const playableMedia = useMemo(() => getActivePlaybackQueue(mediaContent), [mediaContent, scheduleTick]);
   const preferredMedia = useMemo(() => getPreferredPlayableMedia(mediaContent), [mediaContent, scheduleTick]);
@@ -74,29 +175,6 @@ const PopoutPlayer = () => {
 
     setCurrentIndex((prev) => Math.min(prev, playableMedia.length - 1));
   }, [playableMedia, preferredMedia]);
-
-  const checkAccess = async () => {
-    if (!channel?.paid_only) { setHasAccess(true); return; }
-    if (!user) { setHasAccess(false); return; }
-    if (user.id === channel.user_id) { setHasAccess(true); return; }
-    const { data } = await supabase.from("user_premium_subscriptions").select("id").eq("channel_id", channel.id).eq("user_id", user.id).gte("expires_at", new Date().toISOString()).limit(1);
-    setHasAccess((data && data.length > 0) || false);
-  };
-
-  const fetchData = async () => {
-    if (!id) return;
-    try {
-      const { data: channelData } = await supabase.from("channels").select("id, title, channel_type, streaming_method, mux_playback_id, stream_key, thumbnail_url, is_live, user_id, paid_only, is_hidden, hidden_reason, description, profiles:user_id(username)").eq("id", id).single();
-      if (channelData) {
-        setChannel(channelData as Channel);
-        if (channelData.streaming_method !== "live") {
-          const { data: mediaData } = await supabase.from("media_content").select("id, title, file_url, source_type, is_24_7, start_time, end_time").eq("channel_id", id).order("created_at", { ascending: false });
-          if (mediaData) setMediaContent(mediaData);
-        }
-      }
-    } catch (error) { console.error("Error fetching data:", error); }
-    finally { setLoading(false); }
-  };
 
   const handleEnded = () => setCurrentIndex((prev) => (prev + 1) % (playableMedia.length || 1));
 
