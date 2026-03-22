@@ -48,6 +48,7 @@ import ChannelClips from "@/components/ChannelClips";
 import ChannelRaidSystem from "@/components/ChannelRaidSystem";
 import ChannelHiddenNotice from "@/components/ChannelHiddenNotice";
 import { useScheduledPlayback } from "@/hooks/useScheduledPlayback";
+import { useRealtimeChannelSync } from "@/hooks/useRealtimeChannelSync";
 import { Film, Download, Crown, Dices, Lock, Zap } from "lucide-react";
 import PaidContentGate from "@/components/PaidContentGate";
 import { BLOCKED_CHANNEL_TEXT, getDiscoveryCensorshipReason, shouldCensorChannelFromDiscovery } from "@/lib/channelSafety";
@@ -169,16 +170,15 @@ const ChannelView = () => {
   }, [scheduledPlayback.currentMediaIndex, mediaContent.length]);
 
   useEffect(() => {
-    fetchChannel();
-    fetchMediaContent();
-    fetchPlaybackState();
+    void fetchChannel();
+    void fetchMediaContent();
+    void fetchPlaybackState();
     if (user) {
-      checkStorageUsage();
-      fetchUserRole();
-      fetchViewerPoints();
+      void checkStorageUsage();
+      void fetchUserRole();
+      void fetchViewerPoints();
     }
-    trackView();
-    // Load proxy setting
+    void trackView();
     const savedProxy = localStorage.getItem(`channel_proxy_${id}`);
     if (savedProxy) setUseProxy(savedProxy === "true");
   }, [id, user]);
@@ -350,7 +350,7 @@ const ChannelView = () => {
     upsertMetaProperty("og:description", seoDescription);
   }, [channel?.title, id]);
 
-  const fetchChannel = async () => {
+  const fetchChannel = useCallback(async () => {
     if (!id) return;
 
     try {
@@ -377,6 +377,7 @@ const ChannelView = () => {
         throw error;
       }
 
+      setDeletedChannel(null);
       setChannel(data as Channel);
       setEditedTitle(data.title);
       setEditedDescription(data.description || "");
@@ -392,9 +393,9 @@ const ChannelView = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate, toast]);
 
-  const fetchMediaContent = async () => {
+  const fetchMediaContent = useCallback(async () => {
     if (!id) return;
 
     try {
@@ -409,7 +410,15 @@ const ChannelView = () => {
     } catch (error) {
       console.error("Error fetching media:", error);
     }
-  };
+  }, [id]);
+
+  useRealtimeChannelSync({
+    channelId: id,
+    viewerId: user?.id,
+    refreshChannel: fetchChannel,
+    refreshMedia: fetchMediaContent,
+    refreshDeletedChannel: fetchChannel,
+  });
 
   const checkStorageUsage = async () => {
     if (!user) return;
