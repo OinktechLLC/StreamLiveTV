@@ -18,7 +18,6 @@ const Changelog = () => {
       features: [
         { icon: Globe, text: "Переезд с livestudio-creator.lovable.app на новые резервные домены включаяя На Российских серверах" },
       ],
-    },
       version: "3.0.1",
       date: "Март 2026",
       title: "StreamLiveTV 3.0.1 — Рейды, модерация, PlayerJS, SmotrimFilms",
