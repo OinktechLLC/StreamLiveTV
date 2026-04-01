@@ -11,6 +11,7 @@ import SeasonalEffects from "@/components/SeasonalEffects";
 import ThemeSelector from "@/components/ThemeSelector";
 import RecommendationBanner from "@/components/RecommendationBanner";
 import PlatformPolicyBanner from "@/components/PlatformPolicyBanner";
+import StreamLiveTVSplash from "@/components/StreamLiveTVSplash";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import CreateChannel from "./pages/CreateChannel";
@@ -52,6 +53,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <StreamLiveTVSplash />
           <ConditionalPlatformPolicyBanner />
           <AppSidebar />
           <Routes>
